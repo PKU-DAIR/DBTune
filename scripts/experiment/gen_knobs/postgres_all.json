@@ -1,0 +1,1234 @@
+{
+    "allow_system_table_mods": {
+        "default": "off",
+        "context": "postmaster",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "archive_mode": {
+        "default": "off",
+        "context": "postmaster",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "always",
+            "on",
+            "off"
+        ]
+    },
+    "archive_timeout": {
+        "default": 0,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1073741823
+    },
+    "array_nulls": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "authentication_timeout": {
+        "default": 60,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 600
+    },
+    "autovacuum": {
+        "default": "off",
+        "context": "sighup",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "autovacuum_analyze_scale_factor": {
+        "default": 0.1,
+        "context": "sighup",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 100.0
+    },
+    "autovacuum_analyze_threshold": {
+        "default": 50,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+    },
+    "autovacuum_freeze_max_age": {
+        "default": 200000000,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 100000,
+        "max": 2000000000
+    },
+    "autovacuum_max_workers": {
+        "default": 3,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 8
+    },
+    "autovacuum_multixact_freeze_max_age": {
+        "default": 400000000,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 10000,
+        "max": 2000000000
+    },
+    "autovacuum_naptime": {
+        "default": 60,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 2147483
+    },
+    "autovacuum_vacuum_cost_delay": {
+        "default": 20,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": -1,
+        "max": 100
+    },
+    "autovacuum_vacuum_cost_limit": {
+        "default": -1,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": -1,
+        "max": 10000
+    },
+    "autovacuum_vacuum_scale_factor": {
+        "default": 0.2,
+        "context": "sighup",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 100.0
+    },
+    "autovacuum_vacuum_threshold": {
+        "default": 50,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+    },
+    "autovacuum_work_mem": {
+        "default": -1,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": -1,
+        "max": 2147483647
+    },
+    "backend_flush_after": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 256
+    },
+    "backslash_quote": {
+        "default": "safe_encoding",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "safe_encoding",
+            "on",
+            "off"
+        ]
+    },
+    "bgwriter_delay": {
+        "default": 200,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 10,
+        "max": 10000
+    },
+    "bgwriter_flush_after": {
+        "default": 64,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 256
+    },
+    "bgwriter_lru_maxpages": {
+        "default": 100,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1000
+    },
+    "bgwriter_lru_multiplier": {
+        "default": 2.0,
+        "context": "sighup",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 10.0
+    },
+    "bytea_output": {
+        "default": "hex",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "escape",
+            "hex"
+        ]
+    },
+    "check_function_bodies": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "checkpoint_completion_target": {
+        "default": 0.5,
+        "context": "sighup",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 1.0
+    },
+    "checkpoint_flush_after": {
+        "default": 32,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 256
+    },
+    "checkpoint_timeout": {
+        "default": 300,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 30,
+        "max": 86400
+    },
+    "checkpoint_warning": {
+        "default": 30,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+    },
+    "client_min_messages": {
+        "default": "notice",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "debug5",
+            "debug4",
+            "debug3",
+            "debug2",
+            "debug1",
+            "log",
+            "notice",
+            "warning",
+            "error"
+        ]
+    },
+    "commit_delay": {
+        "default": 0,
+        "context": "superuser",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 100000
+    },
+    "commit_siblings": {
+        "default": 5,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1000
+    },
+    "constraint_exclusion": {
+        "default": "partition",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "partition",
+            "on",
+            "off"
+        ]
+    },
+    "cpu_index_tuple_cost": {
+        "default": 0.005,
+        "context": "user",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 1.79769e+308
+    },
+    "cpu_operator_cost": {
+        "default": 0.0025,
+        "context": "user",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 1.79769e+308
+    },
+    "cpu_tuple_cost": {
+        "default": 0.01,
+        "context": "user",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 1.79769e+308
+    },
+    "cursor_tuple_fraction": {
+        "default": 0.1,
+        "context": "user",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 1.0
+    },
+    "db_user_namespace": {
+        "default": "off",
+        "context": "sighup",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "deadlock_timeout": {
+        "default": 1000,
+        "context": "superuser",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 2147483647
+    },
+    "default_statistics_target": {
+        "default": 100,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 10000
+    },
+    "default_transaction_deferrable": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "default_transaction_isolation": {
+        "default": "read committed",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "serializable",
+            "repeatable read",
+            "read committed",
+            "read uncommitted"
+        ]
+    },
+    "default_transaction_read_only": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "dynamic_shared_memory_type": {
+        "default": "posix",
+        "context": "postmaster",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "posix",
+            "sysv",
+            "mmap"
+        ]
+    },
+    "effective_cache_size": {
+        "default": 524288,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 2147483647
+    },
+    "effective_io_concurrency": {
+        "default": 1,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1000
+    },
+    "enable_bitmapscan": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "enable_hashagg": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "enable_hashjoin": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "enable_indexonlyscan": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "enable_indexscan": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "enable_material": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "enable_mergejoin": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "enable_nestloop": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "enable_seqscan": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "enable_sort": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "enable_tidscan": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "escape_string_warning": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "exit_on_error": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "extra_float_digits": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": -15,
+        "max": 3
+    },
+    "force_parallel_mode": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "off",
+            "on",
+            "regress"
+        ]
+    },
+    "from_collapse_limit": {
+        "default": 8,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 2147483647
+    },
+    "fsync": {
+        "default": "off",
+        "context": "sighup",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "full_page_writes": {
+        "default": "off",
+        "context": "sighup",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "geqo": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "geqo_effort": {
+        "default": 5,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 10
+    },
+    "geqo_generations": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+    },
+    "geqo_pool_size": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+    },
+    "geqo_seed": {
+        "default": 0.0,
+        "context": "user",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 1.0
+    },
+    "geqo_selection_bias": {
+        "default": 2.0,
+        "context": "user",
+        "scope": "global",
+        "type": "real",
+        "min": 1.5,
+        "max": 2.0
+    },
+    "geqo_threshold": {
+        "default": 12,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 2,
+        "max": 2147483647
+    },
+    "gin_fuzzy_search_limit": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+    },
+    "gin_pending_list_limit": {
+        "default": 4096,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 64,
+        "max": 2147483647
+    },
+    "huge_pages": {
+        "default": "try",
+        "context": "postmaster",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "off",
+            "on",
+            "try"
+        ]
+    },
+    "idle_in_transaction_session_timeout": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+    },
+    "ignore_checksum_failure": {
+        "default": "off",
+        "context": "superuser",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "ignore_system_indexes": {
+        "default": "off",
+        "context": "backend",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "IntervalStyle": {
+        "default": "postgres",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "postgres",
+            "postgres_verbose",
+            "sql_standard",
+            "iso_8601"
+        ]
+    },
+    "join_collapse_limit": {
+        "default": 8,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 2147483647
+    },
+    "krb_caseins_users": {
+        "default": "off",
+        "context": "sighup",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "lo_compat_privileges": {
+        "default": "off",
+        "context": "superuser",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "lock_timeout": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+    },
+    "maintenance_work_mem": {
+        "default": 65536,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1024,
+        "max": 2147483647
+    },
+    "max_connections": {
+        "default": 100,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 262143
+    },
+    "max_files_per_process": {
+        "default": 1000,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 25,
+        "max": 2147483647
+    },
+    "max_locks_per_transaction": {
+        "default": 64,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 10,
+        "max": 2147483647
+    },
+    "max_parallel_workers_per_gather": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1024
+    },
+    "max_pred_locks_per_transaction": {
+        "default": 64,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 10,
+        "max": 2147483647
+    },
+    "max_prepared_transactions": {
+        "default": 0,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 262143
+    },
+    "max_stack_depth": {
+        "default": 100,
+        "context": "superuser",
+        "scope": "global",
+        "type": "integer",
+        "min": 100,
+        "max": 7680
+    },
+    "max_wal_size": {
+        "default": 1024,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 32,
+        "max": 2147483647
+    },
+    "max_worker_processes": {
+        "default": 8,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 8
+    },
+    "min_wal_size": {
+        "default": 80,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 32,
+        "max": 2147483647
+    },
+    "old_snapshot_threshold": {
+        "default": -1,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": -1,
+        "max": 86400
+    },
+    "operator_precedence_warning": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "parallel_setup_cost": {
+        "default": 1000.0,
+        "context": "user",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 1.79769e+308
+    },
+    "parallel_tuple_cost": {
+        "default": 0.1,
+        "context": "user",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 1.79769e+308
+    },
+    "post_auth_delay": {
+        "default": 0,
+        "context": "backend",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147
+    },
+    "pre_auth_delay": {
+        "default": 0,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 60
+    },
+    "quote_all_identifiers": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "random_page_cost": {
+        "default": 4.0,
+        "context": "user",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 1.79769e+308
+    },
+    "restart_after_crash": {
+        "default": "off",
+        "context": "sighup",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "row_security": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "seq_page_cost": {
+        "default": 1.0,
+        "context": "user",
+        "scope": "global",
+        "type": "real",
+        "min": 0.0,
+        "max": 1.79769e+308
+    },
+    "session_replication_role": {
+        "default": "origin",
+        "context": "superuser",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "origin",
+            "replica",
+            "local"
+        ]
+    },
+    "shared_buffers": {
+        "default": 1024,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 16,
+        "max": 1000000
+    },
+    "standard_conforming_strings": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "statement_timeout": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+    },
+    "synchronize_seqscans": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "synchronous_commit": {
+        "default": "on",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "local",
+            "remote_write",
+            "remote_apply",
+            "on",
+            "off"
+        ]
+    },
+    "temp_buffers": {
+        "default": 1024,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 100,
+        "max": 1073741823
+    },
+    "temp_file_limit": {
+        "default": -1,
+        "context": "superuser",
+        "scope": "global",
+        "type": "integer",
+        "min": -1,
+        "max": 2147483647
+    },
+    "transaction_deferrable": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "transaction_read_only": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "transform_null_equals": {
+        "default": "off",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "unix_socket_permissions": {
+        "default": 511,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 511
+    },
+    "update_process_title": {
+        "default": "off",
+        "context": "superuser",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "vacuum_cost_delay": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 100
+    },
+    "vacuum_cost_limit": {
+        "default": 200,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 10000
+    },
+    "vacuum_cost_page_dirty": {
+        "default": 20,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 10000
+    },
+    "vacuum_cost_page_hit": {
+        "default": 1,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 10000
+    },
+    "vacuum_cost_page_miss": {
+        "default": 10,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 10000
+    },
+    "vacuum_freeze_min_age": {
+        "default": 50000000,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1000000000
+    },
+    "vacuum_freeze_table_age": {
+        "default": 150000000,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2000000000
+    },
+    "vacuum_multixact_freeze_min_age": {
+        "default": 5000000,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1000000000
+    },
+    "vacuum_multixact_freeze_table_age": {
+        "default": 150000000,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2000000000
+    },
+    "wal_buffers": {
+        "default": -1,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": -1,
+        "max": 262143
+    },
+    "wal_compression": {
+        "default": "off",
+        "context": "superuser",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "wal_level": {
+        "default": "replica",
+        "context": "postmaster",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "minimal",
+            "replica",
+            "logical"
+        ]
+    },
+    "wal_log_hints": {
+        "default": "off",
+        "context": "postmaster",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    },
+    "wal_sync_method": {
+        "default": "fdatasync",
+        "context": "sighup",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "fsync",
+            "fdatasync",
+            "open_sync",
+            "open_datasync"
+        ]
+    },
+    "wal_writer_delay": {
+        "default": 200,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 10000
+    },
+    "wal_writer_flush_after": {
+        "default": 128,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+    },
+    "work_mem": {
+        "default": 4096,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 64,
+        "max": 2147483647
+    },
+    "xmlbinary": {
+        "default": "base64",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "base64",
+            "hex"
+        ]
+    },
+    "xmloption": {
+        "default": "content",
+        "context": "user",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "content",
+            "document"
+        ]
+    },
+    "zero_damaged_pages": {
+        "default": "off",
+        "context": "superuser",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "on",
+            "off"
+        ]
+    }
+}

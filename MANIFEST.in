@@ -1,0 +1,13 @@
+include autotune/cli/*.sh
+include autotune/job_query/queries-mysql-new/*.sql
+include autotune/job_query/queries-postgresql-new/*.sql
+include autotune/cli/selectedList.txt
+include autotune/pipleline/*.py
+include autotune/selector/*.py
+include autotune/optimizer/*.py
+include autotune/optimizer/surrogate/*.py
+include autotune/optimizer/surrogate/base/*.py
+include autotune/optimizer/acquisition_function/*.py
+include autotune/optimizer/acq_maximizer/*.py
+include autotune/transfer/*.py
+include autotune/transfer/tlbo/*.py

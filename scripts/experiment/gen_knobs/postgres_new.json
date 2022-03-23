@@ -1,0 +1,246 @@
+{
+    "backend_flush_after": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 256
+    },
+    "bgwriter_delay": {
+        "default": 200,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 10,
+        "max": 10000
+    },
+    "bgwriter_flush_after": {
+        "default": 64,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 256
+    },
+    "bgwriter_lru_maxpages": {
+        "default": 100,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1073741823
+    },
+    "bgwriter_lru_multiplier": {
+        "default": 2.0,
+        "context": "sighup",
+        "scope": "global",
+        "type": "float",
+        "min": 0.0,
+        "max": 10.0
+    },
+    "checkpoint_completion_target": {
+        "default": 0.5,
+        "context": "sighup",
+        "scope": "global",
+        "type": "float",
+        "min": 0.0,
+        "max": 1.0
+    },
+    "checkpoint_flush_after": {
+        "default": 32,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 256
+    },
+    "checkpoint_timeout": {
+        "default": 300,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 30,
+        "max": 86400
+    },
+    "commit_delay": {
+        "default": 0,
+        "context": "superuser",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 100000
+    },
+    "commit_siblings": {
+        "default": 5,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1000
+    },
+    "deadlock_timeout": {
+        "default": 1000,
+        "context": "superuser",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 2147483647
+    },
+    "default_statistics_target": {
+        "default": 100,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 10000
+    },
+    "effective_cache_size": {
+        "default": 524288,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 1000000
+    },
+    "effective_io_concurrency": {
+        "default": 1,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1000
+    },
+    "from_collapse_limit": {
+        "default": 8,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 2147483647
+    },
+    "join_collapse_limit": {
+        "default": 8,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 2147483647
+    },
+    "maintenance_work_mem": {
+        "default": 65536,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1024,
+        "max": 1000000
+    },
+    "max_parallel_workers_per_gather": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1024
+    },
+    "max_wal_size": {
+        "default": 64,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 2,
+        "max": 8000
+    },
+    "max_worker_processes": {
+        "default": 8,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 262143
+    },
+    "min_wal_size": {
+        "default": 80,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 2,
+        "max": 8000
+    },    
+    "random_page_cost": {
+        "default": 4.0,
+        "context": "user",
+        "scope": "global",
+        "type": "float",
+        "min": 0.0,
+        "max": 100
+    },
+    "seq_page_cost": {
+        "default": 1.0,
+        "context": "user",
+        "scope": "global",
+        "type": "float",
+        "min": 0.0,
+        "max": 100
+    },
+    "shared_buffers": {
+        "default": 1024,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 16,
+        "max": 1000000
+    },
+    "temp_buffers": {
+        "default": 1024,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 100,
+        "max": 10000
+    },
+    "wal_buffers": {
+        "default": -1,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": -1,
+        "max": 262143
+    },
+    "wal_sync_method": {
+        "default": "fdatasync",
+        "context": "sighup",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "fsync",
+            "fdatasync",
+            "open_sync",
+            "open_datasync"
+        ]
+    },
+    "wal_writer_delay": {
+        "default": 200,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 10000
+    },
+    "wal_writer_flush_after": {
+        "default": 128,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+    },
+    "work_mem": {
+        "default": 4096,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 64,
+        "max": 1000000
+    }
+}

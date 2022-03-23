@@ -1,0 +1,306 @@
+{
+    "wal_buffers": {
+        "default": -1,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": -1,
+        "max": 262143,
+        "important_rank": 1,
+        "shap_value": 6.908787077608197
+    },
+    "deadlock_timeout": {
+        "default": 1000,
+        "context": "superuser",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 2147483647,
+        "important_rank": 2,
+        "shap_value": 3.5719907387049092
+    },
+    "seq_page_cost": {
+        "default": 1.0,
+        "context": "user",
+        "scope": "global",
+        "type": "float",
+        "min": 0.0,
+        "max": 100,
+        "important_rank": 3,
+        "shap_value": 3.1715384237724185
+    },
+    "temp_buffers": {
+        "default": 1024,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 100,
+        "max": 10000,
+        "important_rank": 4,
+        "shap_value": 2.8261056910090447
+    },
+    "wal_writer_delay": {
+        "default": 200,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 10000,
+        "important_rank": 5,
+        "shap_value": 2.8206679160327086
+    },
+    "bgwriter_flush_after": {
+        "default": 64,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 256,
+        "important_rank": 6,
+        "shap_value": 1.8406786867888782
+    },
+    "bgwriter_lru_maxpages": {
+        "default": 100,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1073741823,
+        "important_rank": 7,
+        "shap_value": 1.833140439023942
+    },
+    "commit_siblings": {
+        "default": 5,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1000,
+        "important_rank": 8,
+        "shap_value": 1.3489986554396713
+    },
+    "work_mem": {
+        "default": 4096,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 64,
+        "max": 1000000,
+        "important_rank": 9,
+        "shap_value": 1.247691616609433
+    },
+    "checkpoint_flush_after": {
+        "default": 32,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 256,
+        "important_rank": 10,
+        "shap_value": 0.5787100255423371
+    },
+    "wal_sync_method": {
+        "default": "fdatasync",
+        "context": "sighup",
+        "scope": "global",
+        "type": "enum",
+        "enum_values": [
+            "fsync",
+            "fdatasync",
+            "open_sync",
+            "open_datasync"
+        ],
+        "important_rank": 11,
+        "shap_value": 0.5547005701387175
+    },
+    "min_wal_size": {
+        "default": 80,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 2,
+        "max": 8000,
+        "important_rank": 12,
+        "shap_value": 0.14753247046984913
+    },
+    "bgwriter_lru_multiplier": {
+        "default": 2.0,
+        "context": "sighup",
+        "scope": "global",
+        "type": "float",
+        "min": 0.0,
+        "max": 10.0,
+        "important_rank": 13,
+        "shap_value": 0.0746532398060006
+    },
+    "checkpoint_completion_target": {
+        "default": 0.5,
+        "context": "sighup",
+        "scope": "global",
+        "type": "float",
+        "min": 0.0,
+        "max": 1.0,
+        "important_rank": 14,
+        "shap_value": -0.2820257257146597
+    },
+    "bgwriter_delay": {
+        "default": 200,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 10,
+        "max": 10000,
+        "important_rank": 15,
+        "shap_value": -0.4109373880340582
+    },
+    "checkpoint_timeout": {
+        "default": 300,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 30,
+        "max": 86400,
+        "important_rank": 16,
+        "shap_value": -0.8276850970456344
+    },
+    "effective_cache_size": {
+        "default": 524288,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 1000000,
+        "important_rank": 17,
+        "shap_value": -1.2272824400889275
+    },
+    "default_statistics_target": {
+        "default": 100,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 10000,
+        "important_rank": 18,
+        "shap_value": -1.4786357497958535
+    },
+    "random_page_cost": {
+        "default": 4.0,
+        "context": "user",
+        "scope": "global",
+        "type": "float",
+        "min": 0.0,
+        "max": 100,
+        "important_rank": 19,
+        "shap_value": -1.7392785732567932
+    },
+    "effective_io_concurrency": {
+        "default": 1,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1000,
+        "important_rank": 20,
+        "shap_value": -2.0518133531956475
+    },
+    "maintenance_work_mem": {
+        "default": 65536,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1024,
+        "max": 1000000,
+        "important_rank": 21,
+        "shap_value": -2.4346939773113183
+    },
+    "from_collapse_limit": {
+        "default": 8,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 2147483647,
+        "important_rank": 22,
+        "shap_value": -2.780639066383077
+    },
+    "wal_writer_flush_after": {
+        "default": 128,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647,
+        "important_rank": 23,
+        "shap_value": -3.0780067662282713
+    },
+    "backend_flush_after": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 256,
+        "important_rank": 24,
+        "shap_value": -6.9848252749930415
+    },
+    "max_parallel_workers_per_gather": {
+        "default": 0,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 1024,
+        "important_rank": 25,
+        "shap_value": -8.126140621788773
+    },
+    "commit_delay": {
+        "default": 0,
+        "context": "superuser",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 100000,
+        "important_rank": 26,
+        "shap_value": -13.447885470039665
+    },
+    "max_wal_size": {
+        "default": 64,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 2,
+        "max": 8000,
+        "important_rank": 27,
+        "shap_value": -13.641080853811586
+    },
+    "join_collapse_limit": {
+        "default": 8,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1,
+        "max": 2147483647,
+        "important_rank": 28,
+        "shap_value": -15.254158646461295
+    },
+    "shared_buffers": {
+        "default": 1024,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 16,
+        "max": 1000000,
+        "important_rank": 29,
+        "shap_value": -40.203413303929636
+    },
+    "max_worker_processes": {
+        "default": 8,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 0,
+        "max": 262143,
+        "important_rank": 30,
+        "shap_value": -41.61771312131662
+    }
+}

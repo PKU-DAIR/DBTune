@@ -1,0 +1,2 @@
+class AutotuneError(Exception):
+    pass
