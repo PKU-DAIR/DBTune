@@ -1,5 +1,6 @@
 import re
 import os
+import sys
 from shutil import copyfile
 from dynaconf import settings
 import numpy as np
@@ -8,6 +9,7 @@ import ast
 import statistics
 from ConfigSpace import Configuration
 from ConfigSpace.configuration_space import OrderedDict
+from autotune.knobs import logger
 
 TIMEOUT = 4
 num_samples_normal = 0
@@ -362,7 +364,7 @@ def get_increment_result(file, default_knobs):
     return df1, df2
 
 
-def get_hist_json(file, cs, y_variable):
+def get_hist_json(file, cs, y_variable, knob_detail):
     od = OrderedDict()
     f = open(file)
     lines = f.readlines()
@@ -375,14 +377,21 @@ def get_hist_json(file, cs, y_variable):
         for key in knob.copy():
             if not key in cs.get_hyperparameter_names():
                 knob.pop(key, None)
+                logger.info("{key} in {file} is not contained in defined configuration space, removed".format(**locals()))
                 continue
             if not knob[key] == 'ON' and not knob[key] == 'OFF':
                 try:
                     knob[key] = int(knob[key])
                 except:
                     continue
-            if key == "innodb_online_alter_log_max_size":
+            if knob_detail[key]['max'] > sys.maxsize:
                 knob[key] = int(knob[key] / 1000)
+
+        if len(cs.get_hyperparameters()) > len(knob.keys()):
+            for key in cs.get_hyperparameters_dict().keys():
+                if key not in knob.keys():
+                    logger.info("{key} in defined configuration space is not contained in {file}, use default value".format(**locals()))
+                    knob[key] = cs.get_hyperparameters_dict()[key].default_value
 
         config = Configuration(configuration_space=cs, values=knob)
 
