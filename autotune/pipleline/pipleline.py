@@ -104,10 +104,10 @@ class PipleLine(BOBase):
             assert num_objs == 1 and num_constraints == 0
             self.optimizer = TPE_Optimizer(config_space, task_id=task_id, random_state=random_state,
                                               **advisor_kwargs)
-        elif advisor_type == 'ea':
-            from openbox.core.ea_advisor import EA_Advisor
+        elif optimizer_type == 'GA':
+            from autotune.optimizer.ga_optimizer import GA_Optimizer
             assert num_objs == 1 and num_constraints == 0
-            self.config_advisor = EA_Advisor(config_space,
+            self.optimizer = GA_Optimizer(config_space,
                                              num_objs=num_objs,
                                              num_constraints=num_constraints,
                                              optimization_strategy=sample_strategy,
