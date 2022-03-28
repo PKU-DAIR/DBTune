@@ -13,6 +13,7 @@ from openbox.utils.multi_objective import Hypervolume, get_pareto_front
 from openbox.utils.config_space.space_utils import get_config_from_dict
 from openbox.utils.visualization.plot_convergence import plot_convergence
 from openbox.core.base import Observation
+from autotune.utils.transform import  get_transform_function
 
 Perf = collections.namedtuple(
     'perf', ['cost', 'time', 'status', 'additional_info'])
@@ -145,6 +146,16 @@ class HistoryContainer(object):
         for i in self.transform_perf_index:
             transformed_perfs[i] = self.max_y
         transformed_perfs = np.array(transformed_perfs, dtype=np.float64)
+        return transformed_perfs
+
+    def get_transformed_perfs(self, transform=None):
+        # set perf of failed trials to current max
+        transformed_perfs = self.perfs.copy()
+        for i in self.transform_perf_index:
+            transformed_perfs[i] = self.max_y
+
+        transformed_perfs = np.array(transformed_perfs, dtype=np.float64)
+        transformed_perfs = get_transform_function(transform)(transformed_perfs)
         return transformed_perfs
 
     def get_transformed_constraint_perfs(self, bilog_transform=True):

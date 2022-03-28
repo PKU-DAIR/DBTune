@@ -26,6 +26,7 @@ from autotune.selector.selector import SHAPSelector, fANOVASelector, GiniSelecto
 from autotune.optimizer.surrogate.core import build_surrogate, surrogate_switch
 from autotune.optimizer.core import build_acq_func, build_optimizer
 import pdb
+from autotune.knobs import ts, logger
 
 class PipleLine(BOBase):
     """
@@ -52,11 +53,8 @@ class PipleLine(BOBase):
                  random_state=None,
                  num_objs=1,
                  num_constraints=0,
-                 initial_trials=3,
-                 rand_prob=0.1,
-                 optimization_strategy='bo',
                  selector_type='shap',
-                 incremental=None,
+                 incremental='decrease',
                  incremental_step=4,
                  incremental_num=1,
                  num_hps=5,
@@ -76,6 +74,7 @@ class PipleLine(BOBase):
         self.FAILED_PERF = [MAXINT] * num_objs
         advisor_kwargs = advisor_kwargs or {}
         self.selector_type = selector_type
+        self.optimizer_type = optimizer_type
         self.config_space_all = config_space
         self.incremental = incremental  # None, increase, decrease
         self.incremental_step = incremental_step  # how often increment the number of knobs
@@ -86,7 +85,7 @@ class PipleLine(BOBase):
 
         if optimizer_type == 'MBO' or optimizer_type == 'SMAC':
             from autotune.optimizer.bo_optimizer import BO_Optimizer
-            self.optmizer = BO_Optimizer(config_space,
+            self.optimizer = BO_Optimizer(config_space,
                                           num_objs=num_objs,
                                           num_constraints=num_constraints,
                                           initial_trials=initial_runs,
@@ -100,28 +99,10 @@ class PipleLine(BOBase):
                                           task_id=task_id,
                                           random_state=random_state,
                                           **advisor_kwargs)
-        elif advisor_type == 'mcadvisor':
-            from openbox.core.mc_advisor import MCAdvisor
-            self.config_advisor = MCAdvisor(config_space,
-                                            num_objs=num_objs,
-                                            num_constraints=num_constraints,
-                                            initial_trials=initial_runs,
-                                            init_strategy=init_strategy,
-                                            initial_configurations=initial_configurations,
-                                            optimization_strategy=sample_strategy,
-                                            surrogate_type=surrogate_type,
-                                            acq_type=acq_type,
-                                            acq_optimizer_type=acq_optimizer_type,
-                                            ref_point=ref_point,
-                                            history_bo_data=history_bo_data,
-                                            task_id=task_id,
-                                            output_dir=logging_dir,
-                                            random_state=random_state,
-                                            **advisor_kwargs)
-        elif advisor_type == 'tpe':
-            from openbox.core.tpe_advisor import TPE_Advisor
+        elif optimizer_type == 'TPE':
+            from autotune.optimizer.tpe_optimizer import TPE_Optimizer
             assert num_objs == 1 and num_constraints == 0
-            self.config_advisor = TPE_Advisor(config_space, task_id=task_id, random_state=random_state,
+            self.optimizer = TPE_Optimizer(config_space, task_id=task_id, random_state=random_state,
                                               **advisor_kwargs)
         elif advisor_type == 'ea':
             from openbox.core.ea_advisor import EA_Advisor
@@ -180,12 +161,6 @@ class PipleLine(BOBase):
         return self.get_history()
 
 
-    def alter_config_space(self, config_space):
-        self.optmizer.config_space = config_space
-        self.optmizer.history_container.alter_configuration_space(config_space)
-        self.optmizer.setup_bo_basics()
-
-
 
     def knob_selection(self):
         if self.incremental \
@@ -195,23 +170,20 @@ class PipleLine(BOBase):
                 self.num_hps = min(self.num_hps + 1, self.num_hps_max)
             elif self.incremental == 'decrease':
                 self.num_hps = max(self.num_hps - 1, 1)
-            new_config_space = self.selector.knob_selection(self.config_space_all, self.optmizer.history_container, self.num_hps)
-            self.alter_config_space(new_config_space)
+
+            new_config_space = self.selector.knob_selection(self.config_space_all, self.optimizer.history_container, self.num_hps)
+            logger.info("new configuration space: {}".format(new_config_space))
+            self.optimizer.alter_config_space(new_config_space)
         else:
             if self.iteration_id == self.init_num:
                 new_config_space = self.selector.knob_selection(
-                    self.config_space_all, self.optmizer.history_container, self.num_hps)
-                self.alter_config_space(new_config_space)
+                    self.config_space_all, self.optimizer.history_container, self.num_hps)
+                self.optimizer.alter_config_space(new_config_space)
 
     def iterate(self, budget_left=None):
         self.knob_selection()
-        # if have enough data, get_suggorate
-        num_config_evaluated = len(self.optmizer.history_container.configurations)
-        if num_config_evaluated >= self.init_num:
-            self.optmizer.get_surrogate()
-
         # get configuration suggestion
-        config = self.optmizer.get_suggestion()
+        config = self.optimizer.get_suggestion()
         _, trial_state, constraints, objs = self.evaluate(config, budget_left)
 
         return config, trial_state, constraints, objs
@@ -228,7 +200,7 @@ class PipleLine(BOBase):
             os.makedirs(dir_path)
         if file_name is None:
             file_name = 'bo_history_%s.json' % self.task_id
-        return self.optmizer.history_container.save_json(os.path.join(dir_path, file_name))
+        return self.optimizer.history_container.save_json(os.path.join(dir_path, file_name))
 
     def load_history_from_json(self, fn=None):
         """
@@ -248,7 +220,7 @@ class PipleLine(BOBase):
         _time_limit_per_trial = math.ceil(min(self.time_limit_per_trial, _budget_left))
 
         # only evaluate non duplicate configuration
-        if config not in self.optmizer.history_container.configurations:
+        if config not in self.optimizer.history_container.configurations:
             start_time = time.time()
             try:
                 # evaluate configuration on objective_function within time_limit_per_trial
@@ -283,7 +255,7 @@ class PipleLine(BOBase):
                 # Timeout in the last iteration.
                 pass
             else:
-                self.optmizer.update_observation(observation)
+                self.optimizer.update_observation(observation)
         else:
             self.logger.info('This configuration has been evaluated! Skip it: %s' % config)
             history = self.get_history()

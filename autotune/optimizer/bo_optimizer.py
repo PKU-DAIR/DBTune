@@ -97,6 +97,10 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         self.setup_bo_basics()
 
 
+    def alter_config_space(self, new_config_space):
+        self.config_space = new_config_space
+        self.history_container.alter_configuration_space(new_config_space)
+        self.setup_bo_basics()
 
 
 
@@ -335,6 +339,12 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         -------
         A configuration.
         """
+
+        # if have enough data, get_suggorate
+        num_config_evaluated = len(self.history_container.configurations)
+        if num_config_evaluated >= self.init_num:
+            self.optimizer.get_surrogate()
+
         if history_container is None:
             history_container = self.history_container
 
