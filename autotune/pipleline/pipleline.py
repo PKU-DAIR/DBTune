@@ -34,6 +34,7 @@ class PipleLine(BOBase):
 
     def __init__(self, objective_function: callable,
                  config_space,
+                 optimizer_type='MBO',
                  sample_strategy: str = 'bo',
                  max_runs=200,
                  runtime_limit=None,
@@ -58,7 +59,10 @@ class PipleLine(BOBase):
                  incremental=None,
                  incremental_step=4,
                  incremental_num=1,
-                 num_hps=5):
+                 num_hps=5,
+                 advisor_kwargs: dict = None,
+                 **kwargs
+                 ):
 
 
         self.FAILED_PERF = [MAXINT] * num_objs
@@ -67,63 +71,89 @@ class PipleLine(BOBase):
                          runtime_limit=runtime_limit, sample_strategy=sample_strategy,
                          time_limit_per_trial=time_limit_per_trial, history_bo_data=history_bo_data)
 
-        # Create output (logging) directory.
-        # Init logging module.
-        # Random seed generator.
         self.num_objs = num_objs
         self.num_constraints = num_constraints
-        self.init_strategy = init_strategy
-        self.output_dir = logging_dir
-        self.task_id = task_id
-        self.rng = check_random_state(random_state)
-        self.logger = get_logger(self.__class__.__name__)
-
-        # Basic components in Advisor.
-        self.rand_prob = rand_prob
-        self.optimization_strategy = optimization_strategy
-
-        # Init the basic ingredients in Bayesian optimization.
-        self.history_bo_data = history_bo_data
-        self.surrogate_type = surrogate_type
-        self.constraint_surrogate_type = None
-        self.acq_type = acq_type
-        self.acq_optimizer_type = acq_optimizer_type
-        self.init_num = initial_trials
-        self.config_space = config_space
-        self.config_space_seed = self.rng.randint(MAXINT)
-        self.config_space.seed(self.config_space_seed)
-        self.ref_point = ref_point
-
-        self.config_space_all = config_space
-
-        # init history container
-        self.history_container = HistoryContainer(task_id, self.num_constraints, config_space=self.config_space)
-
-        # initial design
-        if initial_configurations is not None and len(initial_configurations) > 0:
-            self.initial_configurations = initial_configurations
-            self.init_num = len(initial_configurations)
-        else:
-            self.initial_configurations = self.create_initial_design(self.init_strategy)
-            self.init_num = len(self.initial_configurations)
-
-        # knobs selector
+        self.FAILED_PERF = [MAXINT] * num_objs
+        advisor_kwargs = advisor_kwargs or {}
         self.selector_type = selector_type
-        self.incremental = incremental              # None, increase, decrease
-        self.incremental_step = incremental_step    # how often increment the number of knobs
-        self.incremental_num = incremental_num      # how many knobs to increment each time
-        self.num_hps = num_hps                      # initial number of knobs before incremental tuning
+        self.config_space_all = config_space
+        self.incremental = incremental  # None, increase, decrease
+        self.incremental_step = incremental_step  # how often increment the number of knobs
+        self.incremental_num = incremental_num  # how many knobs to increment each time
+        self.num_hps = num_hps  # initial number of knobs before incremental tuning
         self.num_hps_max = len(self.config_space_all.get_hyperparameters())
         self.init_selector()
 
-        self.surrogate_model = None
-        self.constraint_models = None
-        self.acquisition_function = None
-        self.optimizer = None
-        self.auto_alter_model = False
-        self.algo_auto_selection()
-        self.check_setup()
-        self.setup_bo_basics()
+        if optimizer_type == 'MBO' or optimizer_type == 'SMAC':
+            from autotune.optimizer.bo_optimizer import BO_Optimizer
+            self.optmizer = BO_Optimizer(config_space,
+                                          num_objs=num_objs,
+                                          num_constraints=num_constraints,
+                                          initial_trials=initial_runs,
+                                          init_strategy=init_strategy,
+                                          initial_configurations=initial_configurations,
+                                          surrogate_type=surrogate_type,
+                                          acq_type=acq_type,
+                                          acq_optimizer_type=acq_optimizer_type,
+                                          ref_point=ref_point,
+                                          history_bo_data=history_bo_data,
+                                          task_id=task_id,
+                                          random_state=random_state,
+                                          **advisor_kwargs)
+        elif advisor_type == 'mcadvisor':
+            from openbox.core.mc_advisor import MCAdvisor
+            self.config_advisor = MCAdvisor(config_space,
+                                            num_objs=num_objs,
+                                            num_constraints=num_constraints,
+                                            initial_trials=initial_runs,
+                                            init_strategy=init_strategy,
+                                            initial_configurations=initial_configurations,
+                                            optimization_strategy=sample_strategy,
+                                            surrogate_type=surrogate_type,
+                                            acq_type=acq_type,
+                                            acq_optimizer_type=acq_optimizer_type,
+                                            ref_point=ref_point,
+                                            history_bo_data=history_bo_data,
+                                            task_id=task_id,
+                                            output_dir=logging_dir,
+                                            random_state=random_state,
+                                            **advisor_kwargs)
+        elif advisor_type == 'tpe':
+            from openbox.core.tpe_advisor import TPE_Advisor
+            assert num_objs == 1 and num_constraints == 0
+            self.config_advisor = TPE_Advisor(config_space, task_id=task_id, random_state=random_state,
+                                              **advisor_kwargs)
+        elif advisor_type == 'ea':
+            from openbox.core.ea_advisor import EA_Advisor
+            assert num_objs == 1 and num_constraints == 0
+            self.config_advisor = EA_Advisor(config_space,
+                                             num_objs=num_objs,
+                                             num_constraints=num_constraints,
+                                             optimization_strategy=sample_strategy,
+                                             batch_size=1,
+                                             task_id=task_id,
+                                             output_dir=logging_dir,
+                                             random_state=random_state,
+                                             **advisor_kwargs)
+        elif advisor_type == 'random':
+            from openbox.core.random_advisor import RandomAdvisor
+            self.config_advisor = RandomAdvisor(config_space,
+                                                num_objs=num_objs,
+                                                num_constraints=num_constraints,
+                                                initial_trials=initial_runs,
+                                                init_strategy=init_strategy,
+                                                initial_configurations=initial_configurations,
+                                                surrogate_type=surrogate_type,
+                                                acq_type=acq_type,
+                                                acq_optimizer_type=acq_optimizer_type,
+                                                ref_point=ref_point,
+                                                history_bo_data=history_bo_data,
+                                                task_id=task_id,
+                                                output_dir=logging_dir,
+                                                random_state=random_state,
+                                                **advisor_kwargs)
+        else:
+            raise ValueError('Invalid advisor type!')
 
 
     def init_selector(self):
@@ -151,13 +181,9 @@ class PipleLine(BOBase):
 
 
     def alter_config_space(self, config_space):
-        self.config_space = config_space
-        self.history_container.alter_configuration_space(config_space)
-        num_config_evaluated = len(self.history_container.configurations)
-        if num_config_evaluated < self.init_num:
-            add_configs = self.create_initial_design()[num_config_evaluated:]
-            self.initial_configurations = self.initial_configurations[:num_config_evaluated] + add_configs
-        self.setup_bo_basics()
+        self.optmizer.config_space = config_space
+        self.optmizer.history_container.alter_configuration_space(config_space)
+        self.optmizer.setup_bo_basics()
 
 
 
@@ -169,23 +195,23 @@ class PipleLine(BOBase):
                 self.num_hps = min(self.num_hps + 1, self.num_hps_max)
             elif self.incremental == 'decrease':
                 self.num_hps = max(self.num_hps - 1, 1)
-            new_config_space = self.selector.knob_selection(self.config_space_all, self.history_container, self.num_hps)
+            new_config_space = self.selector.knob_selection(self.config_space_all, self.optmizer.history_container, self.num_hps)
             self.alter_config_space(new_config_space)
         else:
             if self.iteration_id == self.init_num:
                 new_config_space = self.selector.knob_selection(
-                    self.config_space_all, self.history_container, self.num_hps)
+                    self.config_space_all, self.optmizer.history_container, self.num_hps)
                 self.alter_config_space(new_config_space)
 
     def iterate(self, budget_left=None):
         self.knob_selection()
         # if have enough data, get_suggorate
-        num_config_evaluated = len(self.history_container.configurations)
+        num_config_evaluated = len(self.optmizer.history_container.configurations)
         if num_config_evaluated >= self.init_num:
-            self.get_surrogate()
+            self.optmizer.get_surrogate()
 
         # get configuration suggestion
-        config = self.get_suggestion()
+        config = self.optmizer.get_suggestion()
         _, trial_state, constraints, objs = self.evaluate(config, budget_left)
 
         return config, trial_state, constraints, objs
@@ -271,255 +297,7 @@ class PipleLine(BOBase):
                     self.logger.info('n_observations=300, change acq optimizer from random_scipy to local_random!')
                 self.setup_bo_basics()
 
-    def check_setup(self):
-        """
-        Check optimization_strategy, num_objs, num_constraints, acq_type, surrogate_type.
-        Returns
-        -------
-        None
-        """
-        assert self.optimization_strategy in ['bo', 'random']
-        assert isinstance(self.num_objs, int) and self.num_objs >= 1
-        assert isinstance(self.num_constraints, int) and self.num_constraints >= 0
 
-        # single objective
-        if self.num_objs == 1:
-            if self.num_constraints == 0:
-                assert self.acq_type in ['ei', 'eips', 'logei', 'pi', 'lcb', 'lpei', ]
-            else:  # with constraints
-                assert self.acq_type in ['eic', ]
-                if self.constraint_surrogate_type is None:
-                    self.constraint_surrogate_type = 'gp'
-
-        # multi-objective
-        else:
-            if self.num_constraints == 0:
-                assert self.acq_type in ['ehvi', 'mesmo', 'usemo', 'parego']
-                if self.acq_type == 'mesmo' and self.surrogate_type != 'gp_rbf':
-                    self.surrogate_type = 'gp_rbf'
-                    self.logger.warning('Surrogate model has changed to Gaussian Process with RBF kernel '
-                                        'since MESMO is used. Surrogate_type should be set to \'gp_rbf\'.')
-            else:  # with constraints
-                assert self.acq_type in ['ehvic', 'mesmoc', 'mesmoc2']
-                if self.constraint_surrogate_type is None:
-                    if self.acq_type == 'mesmoc':
-                        self.constraint_surrogate_type = 'gp_rbf'
-                    else:
-                        self.constraint_surrogate_type = 'gp'
-                if self.acq_type == 'mesmoc' and self.surrogate_type != 'gp_rbf':
-                    self.surrogate_type = 'gp_rbf'
-                    self.logger.warning('Surrogate model has changed to Gaussian Process with RBF kernel '
-                                        'since MESMOC is used. Surrogate_type should be set to \'gp_rbf\'.')
-                if self.acq_type == 'mesmoc' and self.constraint_surrogate_type != 'gp_rbf':
-                    self.surrogate_type = 'gp_rbf'
-                    self.logger.warning('Constraint surrogate model has changed to Gaussian Process with RBF kernel '
-                                        'since MESMOC is used. Surrogate_type should be set to \'gp_rbf\'.')
-
-            # Check reference point is provided for EHVI methods
-            if 'ehvi' in self.acq_type and self.ref_point is None:
-                raise ValueError('Must provide reference point to use EHVI method!')
-
-    def setup_bo_basics(self):
-        """
-        Prepare the basic BO components.
-        Returns
-        -------
-        An optimizer object.
-        """
-
-        self.surrogate_model = build_surrogate(func_str=self.surrogate_type,
-                                                   config_space=self.config_space,
-                                                   rng=self.rng,
-                                                   history_hpo_data=self.history_bo_data)
-
-
-        if self.acq_type in ['mesmo', 'mesmoc', 'mesmoc2', 'usemo']:
-            self.acquisition_function = build_acq_func(func_str=self.acq_type,
-                                                       model=self.surrogate_model,
-                                                       constraint_models=self.constraint_models,
-                                                       config_space=self.config_space)
-        else:
-            self.acquisition_function = build_acq_func(func_str=self.acq_type,
-                                                       model=self.surrogate_model,
-                                                       constraint_models=self.constraint_models,
-                                                       ref_point=self.ref_point)
-        if self.acq_type == 'usemo':
-            self.acq_optimizer_type = 'usemo_optimizer'
-        self.optimizer = build_optimizer(func_str=self.acq_optimizer_type,
-                                         acq_func=self.acquisition_function,
-                                         config_space=self.config_space,
-                                         rng=self.rng)
-
-    def create_initial_design(self, init_strategy='default'):
-        """
-        Create several configurations as initial design.
-        Parameters
-        ----------
-        init_strategy: str
-
-        Returns
-        -------
-        Initial configurations.
-        """
-        default_config = self.config_space.get_default_configuration()
-        num_random_config = self.init_num - 1
-        if init_strategy == 'random':
-            initial_configs = self.sample_random_configs(self.init_num)
-            return initial_configs
-        elif init_strategy == 'default':
-            initial_configs = [default_config] + self.sample_random_configs(num_random_config)
-            return initial_configs
-        elif init_strategy == 'random_explore_first':
-            candidate_configs = self.sample_random_configs(100)
-            return self.max_min_distance(default_config, candidate_configs, num_random_config)
-        elif init_strategy == 'sobol':
-            sobol = SobolSampler(self.config_space, num_random_config, random_state=self.rng)
-            initial_configs = [default_config] + sobol.generate(return_config=True)
-            return initial_configs
-        elif init_strategy == 'latin_hypercube':
-            lhs = LatinHypercubeSampler(self.config_space, num_random_config, criterion='maximin')
-            initial_configs = [default_config] + lhs.generate(return_config=True)
-            return initial_configs
-        else:
-            raise ValueError('Unknown initial design strategy: %s.' % init_strategy)
-
-    def max_min_distance(self, default_config, src_configs, num):
-        min_dis = list()
-        initial_configs = list()
-        initial_configs.append(default_config)
-
-        for config in src_configs:
-            dis = np.linalg.norm(config.get_array() - default_config.get_array())
-            min_dis.append(dis)
-        min_dis = np.array(min_dis)
-
-        for i in range(num):
-            furthest_config = src_configs[np.argmax(min_dis)]
-            initial_configs.append(furthest_config)
-            min_dis[np.argmax(min_dis)] = -1
-
-            for j in range(len(src_configs)):
-                if src_configs[j] in initial_configs:
-                    continue
-                updated_dis = np.linalg.norm(src_configs[j].get_array() - furthest_config.get_array())
-                min_dis[j] = min(updated_dis, min_dis[j])
-
-        return initial_configs
-
-
-    def get_surrogate(self, history_container=None):
-
-        if history_container is None:
-            history_container = self.history_container
-
-        X = convert_configurations_to_array(history_container.configurations)
-        Y = history_container.get_transformed_perfs()
-        cY = history_container.get_transformed_constraint_perfs()
-
-        if self.optimization_strategy == 'bo':
-            self.surrogate_model.train(X, Y)
-
-
-    def get_suggestion(self, history_container=None, return_list=False):
-        """
-        Generate a configuration (suggestion) for this query.
-        Returns
-        -------
-        A configuration.
-        """
-        if history_container is None:
-            history_container = self.history_container
-
-        self.alter_model(history_container)
-
-        num_config_evaluated = len(history_container.configurations)
-        num_config_successful = len(history_container.successful_perfs)
-
-        if num_config_evaluated < self.init_num:
-            return self.initial_configurations[num_config_evaluated]
-
-        if self.optimization_strategy == 'random':
-            return self.sample_random_configs(1, history_container)[0]
-
-        if (not return_list) and self.rng.random() < self.rand_prob:
-            self.logger.info('Sample random config. rand_prob=%f.' % self.rand_prob)
-            return self.sample_random_configs(1, history_container)[0]
-
-        if self.optimization_strategy == 'bo':
-            # update acquisition function
-            if self.num_objs == 1:
-                incumbent_value = history_container.get_incumbents()[0][1]
-                self.acquisition_function.update(model=self.surrogate_model,
-                                                 constraint_models=self.constraint_models,
-                                                 eta=incumbent_value,
-                                                 num_data=num_config_evaluated)
-
-
-            # optimize acquisition function
-            challengers = self.optimizer.maximize(runhistory=history_container,
-                                                  num_points=5000)
-            if return_list:
-                # Caution: return_list doesn't contain random configs sampled according to rand_prob
-                return challengers.challengers
-
-            for config in challengers.challengers:
-                if config not in history_container.configurations:
-                    return config
-            self.logger.warning('Cannot get non duplicate configuration from BO candidates (len=%d). '
-                                'Sample random config.' % (len(challengers.challengers), ))
-            return self.sample_random_configs(1, history_container)[0]
-        else:
-            raise ValueError('Unknown optimization strategy: %s.' % self.optimization_strategy)
-
-    def update_observation(self, observation: Observation):
-        """
-        Update the current observations.
-        Parameters
-        ----------
-        observation
-
-        Returns
-        -------
-
-        """
-        return self.history_container.update_observation(observation)
-
-    def sample_random_configs(self, num_configs=1, history_container=None, excluded_configs=None):
-        """
-        Sample a batch of random configurations.
-        Parameters
-        ----------
-        num_configs
-
-        history_container
-
-        Returns
-        -------
-
-        """
-        if history_container is None:
-            history_container = self.history_container
-        if excluded_configs is None:
-            excluded_configs = set()
-
-        configs = list()
-        sample_cnt = 0
-        max_sample_cnt = 1000
-        while len(configs) < num_configs:
-            config = self.config_space.sample_configuration()
-            sample_cnt += 1
-            if config not in (history_container.configurations + configs) and config not in excluded_configs:
-                configs.append(config)
-                sample_cnt = 0
-                continue
-            if sample_cnt >= max_sample_cnt:
-                self.logger.warning('Cannot sample non duplicate configuration after %d iterations.' % max_sample_cnt)
-                configs.append(config)
-                sample_cnt = 0
-        return configs
-
-    def get_history(self):
-        return self.history_container
 
     def save_history(self, dir_path: str = None, file_name: str = None):
         """
@@ -531,7 +309,7 @@ class PipleLine(BOBase):
             os.makedirs(dir_path)
         if file_name is None:
             file_name = 'bo_history_%s.json' % self.task_id
-        return self.history_container.save_json(os.path.join(dir_path, file_name))
+        return self.optmizer.history_container.save_json(os.path.join(dir_path, file_name))
 
     def load_history_from_json(self, fn=None):
         """
@@ -551,7 +329,7 @@ class PipleLine(BOBase):
         _time_limit_per_trial = math.ceil(min(self.time_limit_per_trial, _budget_left))
 
         # only evaluate non duplicate configuration
-        if config not in self.history_container.configurations:
+        if config not in self.optmizer.history_container.configurations:
             start_time = time.time()
             try:
                 # evaluate configuration on objective_function within time_limit_per_trial
@@ -586,7 +364,7 @@ class PipleLine(BOBase):
                 # Timeout in the last iteration.
                 pass
             else:
-                self.update_observation(observation)
+                self.optmizer.update_observation(observation)
         else:
             self.logger.info('This configuration has been evaluated! Skip it: %s' % config)
             history = self.get_history()

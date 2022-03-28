@@ -47,12 +47,12 @@ class BOBase(object, metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     def get_history(self):
-        assert self.config_advisor is not None
-        return self.config_advisor.history_container
+        assert self.optimizer is not None
+        return self.optimizer.history_container
 
     def get_incumbent(self):
-        assert self.config_advisor is not None
-        return self.config_advisor.history_container.get_incumbents()
+        assert self.optimizer is not None
+        return self.optimizer.history_container.get_incumbents()
 
     def _get_logger(self, name):
         logger_name = 'OpenBox-%s' % name
