@@ -84,7 +84,11 @@ class DBTuner:
                        surrogate_type=self.surrogate_type,
                        history_bo_data=self.odL,
                        acq_optimizer_type='local_random',  # 'random_scipy',#
-                       initial_runs=10,
+                       selector_type=self.args_tune['selector_type'],
+                       initial_runs=eval(self.args_tune['initial_runs']),
+                       incremental=self.args_tune['incremental'],
+                       incremental_step=eval(self.args_tune['incremental_step']),
+                       incremental_num=eval(self.args_tune['incremental_num']),
                        init_strategy='random_explore_first',
                        task_id=self.args_tune['task_id'],
                        time_limit_per_trial=60 * 200,
