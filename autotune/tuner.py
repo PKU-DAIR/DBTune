@@ -5,49 +5,23 @@ from autotune.workload_map import WorkloadMapping
 from autotune.pipleline.pipleline import PipleLine
 from .knobs import ts, logger
 from .utils.parser import  get_hist_json
+import pdb
 
 class DBTuner:
     def __init__(self, args_db, args_tune, env):
         self.model = None
         self.env = env
-        self.batch_size = args_tune['batch_size']
-        self.episodes = args_tune['episodes']
-        if args_tune['replay_memory']:
-            self.model.replay_memory.load_memory(replay_memory)
-            logger.info('Load memory: {}'.format(self.model.replay_memory))
-
-        self.train_step = 0
-        self.accumulate_loss = [0, 0]
-        self.step_counter = 0
-        self.expr_name = 'train_{}'.format(ts)
-        # ouprocess
-        self.sigma = 0.2
-        # decay rate
-        self.sigma_decay_rate = 0.99
         self.create_output_folders()
-        self.step_times, self.train_step_times = [], []
-        self.env_step_times, self.env_restart_times, self.action_step_times = [], [], []
-        self.noisy = False
-        '''self.method = args_tune['method']
-        self.lhs_log = env.lhs_log
-        self.restore_state = args_tune['restore_state']
-        self.workload_map =eval(args_tune['workload_map'])
-        self.data_repo = args_tune['data_repo']
-        self.lhs_num = int(args_tune['lhs_num'])
-        self.y_variable = env.y_variable
-        self.trials_file = args_tune['trials_file']
-        self.tr_init = args_tune['tr_init']
-        self.task_id = args_tune['task_id']
-        self.rgpe = eval(args_tune['rgpe'])'''
         self.args_tune = args_tune
-        self.method = args_tune['method']
+        self.method = args_tune['optimize_method']
         self.y_variable = env.y_variable
-        if eval(args_tune['workload_map']):
-            self.mapper = WorkloadMapping(args_tune['data_repo'], self.env.knobs_detail, self.y_variable)
+        self.transfer_framework =  args_tune['transfer_framework']
+        self.odL = []
 
+        self.setup_configuration_space()
+        self.setup_transfer()
 
-
-    def tune(self):
+    def setup_configuration_space(self):
         KNOBS = self.env.knobs_detail
         config_space = ConfigurationSpace()
         for name in KNOBS.keys():
@@ -69,14 +43,20 @@ class DBTuner:
 
             config_space.add_hyperparameters([knob])
 
-        task_id = self.args_tune['task_id']
-        odL = []
+        self.config_space = config_space
 
-        if eval(self.args_tune['rgpe']):
+
+    def setup_transfer(self):
+        if self.transfer_framework == 'workload_map':
+            self.mapper = WorkloadMapping(args_tune['data_repo'], self.env.knobs_detail, self.y_variable)
+
+        elif self.transfer_framework == 'rgpe':
+            odL = []
             files = os.listdir(self.args_tune['data_repo'])
             for f in files:
                 try:
-                    od = get_hist_json(os.path.join(self.args_tune['data_repo'], f), cs=config_space, y_variable=self.y_variable)
+                    od = get_hist_json(os.path.join(self.args_tune['data_repo'], f), cs=self.config_space,
+                                       y_variable=self.y_variable, knob_detail=self.env.knobs_detail)
                     odL.append(od)
                 except:
                     logger.info('build base surrogate failed for {}'.format(f))
@@ -84,28 +64,32 @@ class DBTuner:
                 rgpe_method = 'rgpe_gp'
             else:
                 rgpe_method = 'rgpe_prf'
-            surrogate_type = 'tlbo_rgpe_' + rgpe_method
+            self.surrogate_type = 'tlbo_rgpe_' + rgpe_method
+            self.odL = odL
         else:
             if self.method == 'SMAC':
-                surrogate_type = 'gp'
+                self.surrogate_type = 'gp'
             else:
-                surrogate_type = 'prf'
+                self.surrogate_type = 'prf'
 
+
+
+    def tune(self):
         bo = PipleLine(self.env.step_openbox,
-                       config_space,
+                       self.config_space,
                        num_objs=1,
                        num_constraints=0,
                        max_runs=210,
-                       surrogate_type=surrogate_type,
-                       history_bo_data=odL,
+                       surrogate_type=self.surrogate_type,
+                       history_bo_data=self.odL,
                        acq_optimizer_type='local_random',  # 'random_scipy',#
                        initial_runs=10,
                        init_strategy='random_explore_first',
-                       task_id=task_id,
+                       task_id=self.args_tune['task_id'],
                        time_limit_per_trial=60 * 200,
                        num_hps=len(self.env.default_knobs.keys()))
 
-        save_file = task_id + '.pkl'
+        save_file = self.args_tune['task_id'] + '.pkl'
         advisor = bo.config_advisor
         history = bo.run()
         '''try:

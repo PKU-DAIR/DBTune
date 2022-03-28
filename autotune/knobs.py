@@ -4,7 +4,6 @@ import pandas as pd
 import bisect
 import numpy as np
 from .utils import logger
-from .utils.parser import  convert_65IM_to_51IM
 import numpy as np
 import os
 import re
@@ -414,6 +413,7 @@ def get_data_for_mapping(fn):
             if len(t) == 5:
                 del(internal_metric[51:65])
             elif t[5] == '65d':
+                from .utils.parser import convert_65IM_to_51IM
                 internal_metric = list(convert_65IM_to_51IM(np.array(internal_metric)))
 
         if len(combinationL):
