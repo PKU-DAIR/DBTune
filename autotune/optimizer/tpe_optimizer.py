@@ -68,6 +68,26 @@ class TPE_Optimizer:
         self.kde_models = dict()
         self.logger = logging.getLogger(self.__class__.__name__)
 
+
+    def alter_config_space(self, new_config_space):
+        self.config_space = new_config_space
+        self.history_container.alter_configuration_space(new_config_space)
+
+        hps = self.config_space.get_hyperparameters()
+        self.kde_vartypes = ""
+        self.vartypes = []
+
+        for h in hps:
+            if hasattr(h, 'choices'):
+                self.kde_vartypes += 'u'
+                self.vartypes += [len(h.choices)]
+            else:
+                self.kde_vartypes += 'c'
+                self.vartypes += [0]
+
+        self.vartypes = np.array(self.vartypes, dtype=int)
+
+
     def update_observation(self, observation: Observation):
         self.history_container.update_observation(observation)
 
@@ -233,8 +253,6 @@ class TPE_Optimizer:
 
         # quick rule of thumb
         bw_estimation = 'normal_reference'
-        import pdb
-        pdb.set_trace()
         bad_kde = sm.nonparametric.KDEMultivariate(data=train_data_bad, var_type=self.kde_vartypes,
                                                    bw=bw_estimation)
         good_kde = sm.nonparametric.KDEMultivariate(data=train_data_good, var_type=self.kde_vartypes,
