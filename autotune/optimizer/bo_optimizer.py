@@ -343,7 +343,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         # if have enough data, get_suggorate
         num_config_evaluated = len(self.history_container.configurations)
         if num_config_evaluated >= self.init_num:
-            self.optimizer.get_surrogate()
+            self.get_surrogate()
 
         if history_container is None:
             history_container = self.history_container

@@ -86,4 +86,4 @@ def get_transform_function(transform: str):
     if transform in _func_dict.keys():
         return _func_dict[transform]
     else:
-        raise ValueError('Invalid transform: %s' % (transform, )) 
+        raise ValueError('Invalid transform: %s' % (transform, ))
