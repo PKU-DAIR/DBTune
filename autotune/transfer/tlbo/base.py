@@ -7,7 +7,7 @@ import numpy as np
 from typing import List
 
 from openbox.utils.util_funcs import get_types
-from openbox.core.base import build_surrogate
+from autotune.optimizer.surrogate.core import build_surrogate
 from openbox.utils.constants import VERY_SMALL_NUMBER
 from openbox.utils.config_space import ConfigurationSpace
 from openbox.utils.config_space.util import convert_configurations_to_array

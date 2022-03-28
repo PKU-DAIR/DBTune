@@ -1,7 +1,7 @@
 # License: MIT
 
 import numpy as np
-from openbox.surrogate.tlbo.base import BaseTLSurrogate
+from autotune.transfer.tlbo.base import BaseTLSurrogate
 
 
 class RGPE(BaseTLSurrogate):
