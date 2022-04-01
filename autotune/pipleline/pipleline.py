@@ -116,22 +116,12 @@ class PipleLine(BOBase):
                                              output_dir=logging_dir,
                                              random_state=random_state,
                                              **advisor_kwargs)
-        elif advisor_type == 'random':
-            from openbox.core.random_advisor import RandomAdvisor
-            self.config_advisor = RandomAdvisor(config_space,
-                                                num_objs=num_objs,
-                                                num_constraints=num_constraints,
+        elif optimizer_type == 'TurBO':
+            from autotune.optimizer.turbo_optimizer import TURBO_Optimizer
+            self.optimizer = TURBO_Optimizer(config_space,
                                                 initial_trials=initial_runs,
                                                 init_strategy=init_strategy,
                                                 initial_configurations=initial_configurations,
-                                                surrogate_type=surrogate_type,
-                                                acq_type=acq_type,
-                                                acq_optimizer_type=acq_optimizer_type,
-                                                ref_point=ref_point,
-                                                history_bo_data=history_bo_data,
-                                                task_id=task_id,
-                                                output_dir=logging_dir,
-                                                random_state=random_state,
                                                 **advisor_kwargs)
         else:
             raise ValueError('Invalid advisor type!')
@@ -163,22 +153,32 @@ class PipleLine(BOBase):
 
 
     def knob_selection(self):
-        if self.incremental \
-                and self.iteration_id > self.init_num \
+        if self.iteration_id < self.init_num:
+            return
+        elif self.iteration_id == self.init_num:
+            if self.num_hps == len(self.config_space.get_hyperparameter_names()):
+                return
+            new_config_space = self.selector.knob_selection(
+                self.config_space_all, self.optimizer.history_container, self.num_hps)
+            if not self.config_space_all == new_config_space:
+                logger.info("new configuration space: {}".format(new_config_space))
+                self.optimizer.alter_config_space(new_config_space)
+
+        elif self.incremental \
                 and (self.iteration_id - self.init_num) % self.incremental_step == 0:
             if self.incremental == 'increase':
                 self.num_hps = min(self.num_hps + 1, self.num_hps_max)
             elif self.incremental == 'decrease':
                 self.num_hps = max(self.num_hps - 1, 1)
 
+            if self.num_hps == len(self.config_space.get_hyperparameter_names()):
+                return
+
             new_config_space = self.selector.knob_selection(self.config_space_all, self.optimizer.history_container, self.num_hps)
-            logger.info("new configuration space: {}".format(new_config_space))
-            self.optimizer.alter_config_space(new_config_space)
-        else:
-            if self.iteration_id == self.init_num:
-                new_config_space = self.selector.knob_selection(
-                    self.config_space_all, self.optimizer.history_container, self.num_hps)
+            if not self.config_space_all == new_config_space:
+                logger.info("new configuration space: {}".format(new_config_space))
                 self.optimizer.alter_config_space(new_config_space)
+
 
     def iterate(self, budget_left=None):
         self.knob_selection()
@@ -251,6 +251,7 @@ class PipleLine(BOBase):
                 config=config, objs=objs, constraints=constraints,
                 trial_state=trial_state, elapsed_time=elapsed_time,
             )
+
             if _time_limit_per_trial != self.time_limit_per_trial and trial_state == TIMEOUT:
                 # Timeout in the last iteration.
                 pass

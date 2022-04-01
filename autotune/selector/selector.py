@@ -28,7 +28,6 @@ class KnobSelector(object, metaclass=abc.ABCMeta):
 
 class SHAPSelector(KnobSelector):
     def knob_selection(self, config_space, history_container, num_hps):
-        pdb.set_trace()
         X = convert_configurations_to_array(history_container.configurations_all)
         Y = np.array(history_container.get_transformed_perfs())
 
