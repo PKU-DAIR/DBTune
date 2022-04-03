@@ -122,7 +122,19 @@ class PipleLine(BOBase):
                                                 initial_trials=initial_runs,
                                                 init_strategy=init_strategy,
                                                 initial_configurations=initial_configurations,
+                                                task_id=task_id,
                                                 **advisor_kwargs)
+        elif optimizer_type == 'DDPG':
+            if self.num_hps == len(self. config_space._hyperparameters.keys()):
+                initial_runs = 0
+            from autotune.optimizer.ddpg_optimizer import DDPG_Optimizer
+            self.optimizer = DDPG_Optimizer(config_space,
+                                            num_hps,
+                                            initial_trials=initial_runs,
+                                            init_strategy=init_strategy,
+                                            initial_configurations=initial_configurations,
+                                            task_id=task_id,
+                                            **advisor_kwargs)
         else:
             raise ValueError('Invalid advisor type!')
 
@@ -160,7 +172,7 @@ class PipleLine(BOBase):
                 return
             new_config_space = self.selector.knob_selection(
                 self.config_space_all, self.optimizer.history_container, self.num_hps)
-            if not self.config_space_all == new_config_space:
+            if not self.config_space == new_config_space:
                 logger.info("new configuration space: {}".format(new_config_space))
                 self.optimizer.alter_config_space(new_config_space)
 
@@ -175,7 +187,7 @@ class PipleLine(BOBase):
                 return
 
             new_config_space = self.selector.knob_selection(self.config_space_all, self.optimizer.history_container, self.num_hps)
-            if not self.config_space_all == new_config_space:
+            if not self.config_space == new_config_space:
                 logger.info("new configuration space: {}".format(new_config_space))
                 self.optimizer.alter_config_space(new_config_space)
 
@@ -220,7 +232,7 @@ class PipleLine(BOBase):
         _time_limit_per_trial = math.ceil(min(self.time_limit_per_trial, _budget_left))
 
         # only evaluate non duplicate configuration
-        if config not in self.optimizer.history_container.configurations:
+        if True:#config not in self.optimizer.history_container.configurations:
             start_time = time.time()
             try:
                 # evaluate configuration on objective_function within time_limit_per_trial
