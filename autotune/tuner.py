@@ -46,6 +46,7 @@ class DBTuner:
         self.config_space = config_space
 
 
+
     def setup_transfer(self):
         if self.transfer_framework == 'workload_map':
             self.mapper = WorkloadMapping(args_tune['data_repo'], self.env.knobs_detail, self.y_variable)
@@ -92,7 +93,8 @@ class DBTuner:
                        init_strategy='random_explore_first',
                        task_id=self.args_tune['task_id'],
                        time_limit_per_trial=60 * 200,
-                       num_hps=len(self.env.default_knobs.keys()))
+                       num_hps=int(self.args_tune['initial_tunable_knob_num'])
+                       )
 
         save_file = self.args_tune['task_id'] + '.pkl'
         advisor = bo.config_advisor

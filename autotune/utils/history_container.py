@@ -25,6 +25,7 @@ class HistoryContainer(object):
         self.config_space = config_space  # for show_importance
         self.config_space_all = config_space
         self.data = collections.OrderedDict()  # only successful data
+        self.data_all = collections.OrderedDict()
         self.config_counter = 0
         self.incumbent_value = MAXINT
         self.incumbents = list()
@@ -129,6 +130,7 @@ class HistoryContainer(object):
             return
 
         self.data[config] = perf
+        self.data_all[self.fill_default_value(config)] = perf
         self.config_counter += 1
 
         if len(self.incumbents) > 0:
@@ -446,7 +448,7 @@ class HistoryContainer(object):
     def alter_configuration_space(self, new_sapce: ConfigurationSpace):
         configurations = []
         data = collections.OrderedDict()
-        for c in  self.configurations:
+        for c in  self.configurations_all:
             values = {}
             for key in new_sapce._hyperparameters:
                 if key in c.keys():
@@ -457,8 +459,8 @@ class HistoryContainer(object):
             c_new = Configuration(new_sapce, values)
             configurations.append(c_new)
 
-        for c in list(self.data.keys()):
-            perf = self.get_perf(c)
+        for c in list(self.data_all.keys()):
+            perf = self.data_all[c]
             values = {}
             for key in new_sapce._hyperparameters:
                 if key in c.keys():
@@ -496,6 +498,7 @@ class MOHistoryContainer(HistoryContainer):
             return
 
         self.data[config] = perf
+        self.data_all[self.fill_default_value(config)] = perf
         self.config_counter += 1
 
         # update pareto
