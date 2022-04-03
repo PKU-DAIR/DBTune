@@ -447,7 +447,42 @@ class TURBO_Optimizer:
         return initial_configs
 
     def alter_config_space(self, new_config_space):
+        X = self.X.copy()
+        X_new = np.zeros((0, len(new_config_space._hyperparameters.keys())))
+
+        keys = self.config_space.get_hyperparameter_names()
+        for key in keys:
+            if type(self.config_space.get_hyperparameters_dict()[key]) == CategoricalHyperparameter:
+                X[:, keys.index(key)] = np.round(self.X[:, keys.index(key)] * (self.config_space.get_hyperparameters_dict()[key].num_choices - 1))
+
+        for i in range(self.X.shape[0]):
+            c = Configuration(self.config_space, vector=X[i,:].reshape(-1, self.batch_size))
+            config = c.get_dictionary()
+            new_config = {}
+            for k in new_config_space._hyperparameters.keys():
+                if k in config.keys():
+                    new_config[k] = config[k]
+                else:
+                    new_config[k] = new_config_space._hyperparameters[k].default_value
+            c_new = Configuration(new_config_space, new_config)
+
+            x = c_new.get_array()
+            keys = new_config_space.get_hyperparameter_names()
+
+            for key in keys:
+                if type(new_config_space.get_hyperparameters_dict()[key]) == CategoricalHyperparameter:
+                    x[keys.index(key)] = x[keys.index(key)] / (
+                                new_config_space.get_hyperparameters_dict()[key].num_choices - 1)
+
+            X_new = np.vstack((X_new, x))
+
+        self.X = X_new
+        self.hypers = [{} for _ in range(self.n_trust_regions)]
+        self.dim = len(new_config_space.get_hyperparameter_names())
         self.config_space = new_config_space
         self.history_container.alter_configuration_space(new_config_space)
+
+
+
 
 
