@@ -249,10 +249,11 @@ class DBEnv():
     def get_states(self, collect_cpu=0):
         start = time.time()
         self.connect_sucess = True
-        p = psutil.Process(self.db.pid)
-        if len(p.cpu_affinity())!= self.cpu_core:
-            command = 'sudo cgclassify -g memory,cpuset:sever ' + str(self.db.pid)
-            os.system(command)
+        if not self.online_mode:
+            p = psutil.Process(self.db.pid)
+            if len(p.cpu_affinity())!= self.cpu_core:
+                command = 'sudo cgclassify -g memory,cpuset:sever ' + str(self.db.pid)
+                os.system(command)
 
         internal_metrics = Manager().list()
         im = mp.Process(target=self.db.get_internal_metrics, args=(internal_metrics, BENCHMARK_RUNNING_TIME, BENCHMARK_WARMING_TIME))
@@ -262,7 +263,7 @@ class DBEnv():
             rm = ResourceMonitor(self.db.pid, 1, BENCHMARK_WARMING_TIME, BENCHMARK_RUNNING_TIME)
             rm.run()
         cmd, filename = self.get_benchmark_cmd()
-        v = p.cpu_percent()
+        # v = p.cpu_percent()
         print("[{}] benchmark start!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
         p_benchmark = subprocess.Popen(cmd, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, close_fds=True)
         try:
@@ -273,12 +274,13 @@ class DBEnv():
         except subprocess.TimeoutExpired:
             print("[{}] benchmark timeout!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
         # TODO: move to database.py
-        if self.db.args['db'] == 'mysql':
-            clear_cmd = """mysqladmin processlist -uroot -S$MYSQL_SOCK | awk '$2 ~ /^[0-9]/ {print "KILL "$2";"}' | mysql -uroot -S$MYSQL_SOCK """
-        elif self.db.args['db'] == 'postgresql':
-            clear_cmd = """psql -c \"select pg_terminate_backend(pid) from pg_stat_activity where datname = 'imdbload';\" """
-        subprocess.Popen(clear_cmd, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, close_fds=True)
-        print("[{}] clear processlist".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
+        if not self.online_mode:
+            if self.db.args['db'] == 'mysql':
+                clear_cmd = """mysqladmin processlist -uroot -S$MYSQL_SOCK | awk '$2 ~ /^[0-9]/ {print "KILL "$2";"}' | mysql -uroot -S$MYSQL_SOCK """
+            elif self.db.args['db'] == 'postgresql':
+                clear_cmd = """psql -c \"select pg_terminate_backend(pid) from pg_stat_activity where datname = 'imdbload';\" """
+            subprocess.Popen(clear_cmd, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, close_fds=True)
+            print("[{}] clear processlist".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
         self.db.set_im_alive(False)
         im.join()
         if collect_cpu:

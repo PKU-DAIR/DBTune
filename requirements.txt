@@ -26,3 +26,5 @@ scikit-optimize
 aliyunsdkcore
 aliyun-python-sdk-rds
 dynaconf
+shap
+lightgbm

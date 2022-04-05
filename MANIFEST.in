@@ -11,3 +11,8 @@ include autotune/optimizer/acquisition_function/*.py
 include autotune/optimizer/acq_maximizer/*.py
 include autotune/transfer/*.py
 include autotune/transfer/tlbo/*.py
+include autotune/transfer/tlbo/*.py
+include autotune/extractor/*.py
+include autotune/extractor/surrogate/*.py
+include autotune/extractor/surrogate/base/*.py
+include autotune/extractor/surrogate/tlbo/*.py
