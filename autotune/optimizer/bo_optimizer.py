@@ -17,7 +17,7 @@ from openbox.utils.constants import MAXINT, SUCCESS
 from openbox.utils.samplers import SobolSampler, LatinHypercubeSampler
 from openbox.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
 from openbox.utils.config_space.util import convert_configurations_to_array
-from openbox.core.base import Observation
+from autotune.utils.history_container import Observation
 from autotune.pipleline.base import BOBase
 from openbox.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
 from openbox.utils.limit import time_limit, TimeoutException

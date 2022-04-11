@@ -17,7 +17,7 @@ from openbox.utils.constants import MAXINT, SUCCESS
 from openbox.utils.samplers import SobolSampler, LatinHypercubeSampler
 from openbox.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
 from openbox.utils.config_space.util import convert_configurations_to_array
-from openbox.core.base import Observation
+from autotune.utils.history_container import Observation
 from autotune.pipleline.base import BOBase
 from openbox.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
 from openbox.utils.limit import time_limit, TimeoutException
@@ -160,6 +160,7 @@ class PipleLine(BOBase):
             self.iterate(budget_left=self.budget_left)
             runtime = time.time() - start_time
             self.budget_left -= runtime
+        self.save_history()
         return self.get_history()
 
 
@@ -193,7 +194,7 @@ class PipleLine(BOBase):
 
 
     def iterate(self, budget_left=None):
-        self.knob_selection()
+        # self.knob_selection()
         # get configuration suggestion
         config = self.optimizer.get_suggestion()
         _, trial_state, constraints, objs = self.evaluate(config, budget_left)
@@ -245,7 +246,8 @@ class PipleLine(BOBase):
                         'Timeout: time limit for this evaluation is %.1fs' % _time_limit_per_trial)
                 else:
                     # parse result
-                    objs, constraints = get_result(_result)
+                    # objs, constraints = get_result(_result)
+                    objs, constraints, res = _result
             except Exception as e:
                 # parse result of failed trial
                 if isinstance(e, TimeoutException):
@@ -256,12 +258,13 @@ class PipleLine(BOBase):
                     trial_state = FAILED
                 objs = self.FAILED_PERF
                 constraints = None
+                res = None
 
             elapsed_time = time.time() - start_time
             # update observation to advisor
             observation = Observation(
                 config=config, objs=objs, constraints=constraints,
-                trial_state=trial_state, elapsed_time=elapsed_time,
+                trial_state=trial_state, elapsed_time=elapsed_time, res_dict=res
             )
 
             if _time_limit_per_trial != self.time_limit_per_trial and trial_state == TIMEOUT:

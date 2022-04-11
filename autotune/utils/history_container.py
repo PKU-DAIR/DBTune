@@ -12,11 +12,13 @@ from openbox.utils.logging_utils import get_logger
 from openbox.utils.multi_objective import Hypervolume, get_pareto_front
 from openbox.utils.config_space.space_utils import get_config_from_dict
 from openbox.utils.visualization.plot_convergence import plot_convergence
-from openbox.core.base import Observation
 from autotune.utils.transform import  get_transform_function
 
 Perf = collections.namedtuple(
     'perf', ['cost', 'time', 'status', 'additional_info'])
+
+Observation = collections.namedtuple(
+    'Observation', ['config', 'trial_state', 'constraints', 'objs', 'elapsed_time', 'res_dict'])
 
 
 class HistoryContainer(object):
@@ -39,6 +41,7 @@ class HistoryContainer(object):
         self.constraint_perfs = list()  # all constraints
         self.trial_states = list()  # all trial states
         self.elapsed_times = list()  # all elapsed times
+        self.internal_metrics = list() # all internal metrics
 
         self.update_times = list()  # record all update times
 
@@ -71,16 +74,15 @@ class HistoryContainer(object):
         constraints = observation.constraints
         trial_state = observation.trial_state
         elapsed_time = observation.elapsed_time
+        internal_metrics = observation.res_dict['IM']
 
         self.configurations.append(config)
         self.configurations_all.append((self.fill_default_value(config)))
-        if self.num_objs == 1:
-            self.perfs.append(objs[0])
-        else:
-            self.perfs.append(objs)
+        self.perfs.append(objs[0])
         self.trial_states.append(trial_state)
         self.constraint_perfs.append(constraints)  # None if no constraint
         self.elapsed_times.append(elapsed_time)
+        self.internal_metrics.append(internal_metrics)
 
         transform_perf = False
         failed = False
@@ -96,18 +98,23 @@ class HistoryContainer(object):
                     transform_perf = True
                     feasible = False
 
-                if self.num_objs == 1:
-                    self.successful_perfs.append(objs[0])
-                    if feasible:
-                        self.add(config, objs[0])
-                    else:
-                        self.add(config, MAXINT)
+                self.successful_perfs.append(objs[0])
+                if config in self.data:
+                    self.logger.warning('Repeated configuration detected!')
                 else:
-                    self.successful_perfs.append(objs)
-                    if feasible:
-                        self.add(config, objs)
+                    self.data[config] = observation.res_dict
+                    self.data_all[self.fill_default_value(config)] = observation.res_dict
+                    self.config_counter += 1
+
+                    if len(self.incumbents) > 0:
+                        if objs[0] < self.incumbent_value:
+                            self.incumbents.clear()
+                        if objs[0] <= self.incumbent_value:
+                            self.incumbents.append((config, objs[0]))
+                            self.incumbent_value = objs[0]
                     else:
-                        self.add(config, [MAXINT] * self.num_objs)
+                        self.incumbent_value = objs[0]
+                        self.incumbents.append((config, objs[0]))
 
                 self.perc = np.percentile(self.successful_perfs, self.scale_perc, axis=0)
                 self.min_y = np.min(self.successful_perfs, axis=0).tolist()
@@ -142,13 +149,6 @@ class HistoryContainer(object):
         else:
             self.incumbent_value = perf
             self.incumbents.append((config, perf))
-
-    def get_transformed_perfs(self):
-        transformed_perfs = self.perfs.copy()
-        for i in self.transform_perf_index:
-            transformed_perfs[i] = self.max_y
-        transformed_perfs = np.array(transformed_perfs, dtype=np.float64)
-        return transformed_perfs
 
     def get_transformed_perfs(self, transform=None):
         # set perf of failed trials to current max
@@ -414,10 +414,17 @@ class HistoryContainer(object):
         fn : str
             file name
         """
-        data = [(k.get_dictionary(), float(v)) for k, v in self.data.items()]  # todo: all configs
+        all_data = []
+
+        for config, res in self.data.items():
+            data = collections.OrderedDict()
+            data['config'] = config.get_dictionary()
+            for k, v in res.items():
+                data[k] = v
+            all_data.append(data)
 
         with open(fn, "w") as fp:
-            json.dump({"data": data}, fp, indent=2)
+            json.dump({"data": all_data}, fp, indent=2)
 
     def load_history_from_json(self, cs: ConfigurationSpace, fn: str = "history_container.json"):  # todo: all configs
         """Load and runhistory in json representation from disk.
@@ -443,6 +450,10 @@ class HistoryContainer(object):
             config = get_config_from_dict(k, cs)
             perf = float(v)
             _history_data[config] = perf
+
+        for data in all_data["data"]:
+            config = get_config_from_dict(data['config'], cs)
+            _history_data[config] = data
         return _history_data
 
     def alter_configuration_space(self, new_sapce: ConfigurationSpace):

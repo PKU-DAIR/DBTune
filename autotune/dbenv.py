@@ -608,15 +608,38 @@ class DBEnv():
         metrics, internal_metrics, resource = self.step_GP(knobs)
         # record = "{}|{}\n".format(knobs, list(internal_metrics))
         # f.write(record)
-        format_str = '{}|tps_{}|lat_{}|qps_{}|tpsVar_{}|latVar_{}|qpsVar_{}|cpu_{}|readIO_{}|writeIO_{}|virtaulMem_{}|physical_{}|dirty_{}|hit_{}|data_{}|{}|65d\n'
+        format_str = '{}|tps_{}|lat_{}|qps_{}|tpsVar_{}|latVar_{}|qpsVar_{}|cpu_{}|readIO_{}|writeIO_{}|virtaulMem_{}|physical_{}|dirty_{}|hit_{}|data_{}|{}|{}d\n'
         res = format_str.format(knobs, str(metrics[0]), str(metrics[1]), str(metrics[2]),
                                 metrics[3], metrics[4],
                                 metrics[5],
                                 resource[0], resource[1], resource[2], resource[3], resource[4],
-                                resource[5], resource[6], resource[7], list(internal_metrics))
+                                resource[5], resource[6], resource[7], list(internal_metrics), self.db.num_metrics)
         f.write(res)
         f.close()
+
         if self.y_variable == 'tps':
-            return  -float(metrics[0])
+            obj = -float(metrics[0])
         elif self.y_variable == 'lat':
-            return float(metrics[1])
+            obj = float(metrics[1])
+
+        constraint = None
+
+        res = {
+            'tps': metrics[0],
+            'lat': metrics[1],
+            'qps': metrics[2],
+            'tpsVar': metrics[3],
+            'latVar': metrics[4],
+            'qpsVar': metrics[5],
+            'cpu': resource[0],
+            'readIO': resource[1],
+            'writeIO': resource[2],
+            'virtualMem': resource[3],
+            'physical': resource[4],
+            'dirty': resource[5],
+            'hit': resource[6],
+            'data': resource[7],
+            'IM': list(internal_metrics)
+        }
+
+        return (obj, ), constraint, res
