@@ -56,7 +56,7 @@ class DBEnv():
         if self.reinit_interval:
             self.reinit = False
         self.generate_time()
-        self.y_variable = eval(args['performance_metric'])[0]
+        self.y_variable = eval(args['performance_metric'])
         self.lhs_log = args['lhs_log']
         self.cpu_core = args['cpu_core']
 
@@ -312,7 +312,7 @@ class DBEnv():
 
 
     def initialize(self, collect_CPU=0):
-        #return np.random.rand(65), np.random.rand(6), np.random.rand(8)
+        return np.random.rand(65), np.random.rand(6), np.random.rand(8)
         self.score = 0.
         self.steps = 0
         self.terminate = False
@@ -361,100 +361,9 @@ class DBEnv():
         logger.info("[step {}] default:{}".format(self.step_count, res))
         return state, external_metrics, resource
 
-    def step(self, knobs, episode, step, best_action_applied=False, file=None):
-        metrics, internal_metrics, resource = self.step_GP(knobs, best_action_applied)
-        try:
-            format_str = '{}|tps_{}|lat_{}|qps_{}|tpsVar_{}|latVar_{}|qpsVar_{}|cpu_{}|readIO_{}|writeIO_{}|virtaulMem_{}|physical_{}|dirty_{}|hit_{}|data_{}|{}|65d\n'
-            res = format_str.format(knobs, str(metrics[0]), str(metrics[1]), str(metrics[2]),
-                                metrics[3], metrics[4],
-                                metrics[5],
-                                resource[0], resource[1], resource[2], resource[3], resource[4],
-                                resource[5], resource[6], resource[7], list(internal_metrics))
-        except:
-            format_str = '{}|tps_0|lat_300|qps_0|[]|65d\n'
-            res = format_str.format(knobs)
-        with open(file, 'a') as f:
-            f.write(res)
-        reward = self.get_reward(metrics, self.y_variable)
-        if not (self.y_variable == 'tps' and metrics[0] <= 0) and not (self.y_variable == 'lat' and metrics[1] <= 0):
-            self.last_external_metrics = metrics
-
-        #flag = self._record_best(metrics)
-        #if flag:
-        #    logger.info('Better performance changed!')
-        #else:
-        #    logger.info('Performance remained!')
-        # get the best performance so far to calculate the reward
-        # best_now_performance = self._get_best_now()
-        # self.last_external_metrics = best_now_performance
-
-        next_state = internal_metrics
-        # TODO(Hong)
-        terminate = False
-
-        return reward, next_state, terminate, self.score, metrics
-
-    def get_reward_cpu(self, tps, cpu):
-        """Get the reward that is used in reinforcement learning algorithm.
-
-        The reward is calculated by tps and rt that are external metrics.
-        """
-
-        def calculate_reward(delta0, deltat, tps):
-            if delta0 > 0:
-                _reward = ((1 + delta0) ** 2 - 1) * math.fabs(1 + deltat)
-            else:
-                _reward = - ((1 - delta0) ** 2 - 1) * math.fabs(1 - deltat)
-
-            if _reward > 0 and deltat < 0:
-                _reward = 0
-            if _reward < 0 and tps - self.constraint > 0:
-                _reward = 0
-            if _reward > 0 and tps - self.constraint < 0:
-                _reward = 0
-            return _reward
-
-        if tps == 0 or cpu == 0:
-            # bad case, not enough time to restart mysql or bad knobs
-            return 0
-        # latency
-        delta_0_lat = float((-cpu + self.default_cpu)) / self.default_cpu
-        delta_t_lat = float((-cpu + self.last_cpu)) / self.last_cpu
-        reward = calculate_reward(delta_0_lat, delta_t_lat, tps)
-        return reward
-
-    def get_reward_cpu_latency(self, tps, cpu, latency):
-        """Get the reward that is used in reinforcement learning algorithm.
-
-        The reward is calculated by tps and rt that are external metrics.
-        """
-
-        def calculate_reward(delta0, deltat, tps, latency):
-            if delta0 > 0:
-                _reward = ((1 + delta0) ** 2 - 1) * math.fabs(1 + deltat)
-            else:
-                _reward = - ((1 - delta0) ** 2 - 1) * math.fabs(1 - deltat)
-
-            if _reward > 0 and deltat < 0:
-                _reward = 0
-            if _reward < 0 and (tps - self.tps_constraint > 0 and latency - self.latency_constraint < 0 ):
-                _reward = 0
-            if _reward > 0 and (tps - self.tps_constraint < 0 or latency - self.latency_constraint > 0):
-                _reward = 0
-            return _reward
-
-        if tps == 0 or cpu == 0:
-            # bad case, not enough time to restart mysql or bad knobs
-            return 0
-        # latency
-        delta_0_lat = float((-cpu + self.default_cpu)) / self.default_cpu
-        delta_t_lat = float((-cpu + self.last_cpu)) / self.last_cpu
-        reward = calculate_reward(delta_0_lat, delta_t_lat, tps, latency)
-        return reward
-
 
     def step_GP(self, knobs, best_action_applied=False):
-        #return np.random.rand(6), np.random.rand(65), np.random.rand(8)
+        return np.random.rand(6), np.random.rand(65), np.random.rand(8)
 
         if self.reinit_interval > 0 and self.reinit_interval % RESTART_FREQUENCY == 0:
             if self.reinit:
@@ -528,74 +437,29 @@ class DBEnv():
         return external_metrics, internal_metrics, resource
 
 
-    def step_CobBo(self, **action_cobbo):#**knob_cobbo):
-        '''knobs = knob_cobbo.copy()
-        for key in knobs.keys():
-            knobs[key] = math.floor(knobs[key])
-        external_metrics, internal_metrics, resource = self.step_GP(knobs)'''
-        action = np.zeros((len(list(action_cobbo.keys()))))
-        count = 0
-        for key in action_cobbo:
-            action[count] = action_cobbo[key]
-            count = count + 1
-        knobs = generate_knobs(action, 'gp')
-        external_metrics, internal_metrics, resource = self.step_GP(knobs)
-        return external_metrics[0]
 
     def terminate(self):
         return False
 
-    def step_SMAC(self, knobs, seed):
-        f = open(self.lhs_log, 'a')
-        knobs_display = {}
-        for key in knobs.keys():
-            knobs_display[key] = knobs[key]
-        for k in knobs_display.keys():
-            if self.knobs_detail[k]['type'] == 'integer' and self.knobs_detail[k]['max'] > sys.maxsize:
-                knobs_display[k] = knobs_display[k] * 1000
 
-        logger.info('[SMAC][Episode: 1][Step: {}] knobs generated: {}'.format(self.step_count, knobs_display))
-        metrics, internal_metrics, resource = self.step_GP(knobs_display)
-        format_str = '{}|tps_{}|lat_{}|qps_{}|tpsVar_{}|latVar_{}|qpsVar_{}|cpu_{}|readIO_{}|writeIO_{}|virtaulMem_{}|physical_{}|dirty_{}|hit_{}|data_{}|{}|65d\n'
-        res = format_str.format(knobs, str(metrics[0]), str(metrics[1]), str(metrics[2]),
-                                metrics[3], metrics[4],
-                                metrics[5],
-                                resource[0], resource[1], resource[2], resource[3], resource[4],
-                                resource[5], resource[6], resource[7], list(internal_metrics))
+    def get_obj(self, res):
+        if len(self.y_variable) == 1:
+            key = self.y_variable[0].strip().strip('-')
+            value = res[key]
+            if not self.y_variable[0].strip()[0] == '-':
+                value = - value
+            return (value, )
+        else:
+            objs = []
+            for y_variable in self.y_variable:
+                key = y_variable.strip().strip('-')
+                value = res[key]
+                if not y_variable.strip()[0] == '-':
+                    value = - value
+                objs.append(value)
 
-        f.write(res)
-        f.close()
-        if self.y_variable == 'tps':
-            return -metrics[0]
-        elif self.y_variable == 'lat':
-            return metrics[1]
+            return objs
 
-    def step_TPE(self, knobs):
-        knobs_display = {}
-        for key in knobs.keys():
-            if self.knobs_detail[key]['type'] == 'integer':
-                knobs_display[key] = int(knobs[key])
-                if self.knobs_detail[key]['type'] == 'integer' and self.knobs_detail[key]['max'] > sys.maxsize:
-                    knobs_display[key] = knobs_display[key] * 1000
-            else:
-                knobs_display[key] = knobs[key]
-
-        logger.info('[TPE][Episode: 1][Step: {}] knobs generated: {}'.format(self.step_count, knobs_display))
-        external_metrics, internal_metrics, resource = self.step_GP(knobs_display)
-
-        if self.y_variable == 'tps':
-            return -external_metrics[0]
-        elif self.y_variable == 'lat':
-            return external_metrics[1]
-
-
-    def step_turbo(self, action):#**knob_cobbo):
-        knobs = generate_knobs(action, 'gp')
-        external_metrics, internal_metrics, resource = self.step_GP(knobs)
-        if self.y_variable == 'tps':
-            return  -float(external_metrics[0])
-        elif self.y_variable == 'lat':
-            return float(external_metrics[1])
 
 
     def step_openbox(self, config):
@@ -617,11 +481,6 @@ class DBEnv():
         f.write(res)
         f.close()
 
-        if self.y_variable == 'tps':
-            obj = -float(metrics[0])
-        elif self.y_variable == 'lat':
-            obj = float(metrics[1])
-
         constraint = None
 
         res = {
@@ -642,4 +501,6 @@ class DBEnv():
             'IM': list(internal_metrics)
         }
 
-        return (obj, ), constraint, res
+        obj = self.get_obj(res)
+
+        return obj, constraint, res
