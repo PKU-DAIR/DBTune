@@ -11,6 +11,7 @@ from collections import defaultdict
 from typing import Any
 from .knobs import gen_continuous
 import pdb
+import ast
 import sys
 import math
 from .dbconnector import MysqlConnector
@@ -25,6 +26,7 @@ import multiprocessing as mp
 from .resource_monitor import ResourceMonitor
 from autotune.utils.config import knob_config
 from autotune.workload import SYSBENCH_WORKLOAD, JOB_WORKLOAD, OLTPBENCH_WORKLOADS
+from autotune.utils.parser import is_number
 
 RETRY_WAIT_TIME = 60
 
@@ -48,17 +50,43 @@ class DBEnv():
         self.online_mode = eval(args['online_mode'])
         self.oltpbench_config_xml =args['oltpbench_config_xml']
         self.step_count = 0
-        self.tps_constraint = float(args_tune['tps_constraint'])
-        self.latency_constraint = float(args_tune['latency_constraint'])
         self.connect_sucess = True
         self.reinit_interval = 0
         self.reinit = False
         if self.reinit_interval:
             self.reinit = False
         self.generate_time()
-        self.y_variable = eval(args['performance_metric'])
+        self.y_variable = eval(args_tune['performance_metric'])
+        self.reference_point = self.generate_reference_point(eval(args_tune['reference_point']))
+        self.constraints =  eval(args_tune['constraints'])
         self.lhs_log = args['lhs_log']
         self.cpu_core = args['cpu_core']
+
+
+    def generate_reference_point(self, user_defined_reference_point):
+        if len(self.y_variable) <= 1:
+            return None
+
+        reference_point_dir = {
+            'tps': 0,
+            'lat': BENCHMARK_RUNNING_TIME,
+            'qps': 0,
+            'cpu': 0,
+            'readIO': 0,
+            'writeIO': 0,
+            'virtualMem':0,
+            'physical': 0,
+        }
+        reference_point = []
+        for key in self.y_variable:
+            use_defined_value = user_defined_reference_point[self.y_variable.index(key)]
+            if is_number(use_defined_value):
+                reference_point.append(use_defined_value)
+            else:
+                key = key.strip().strip('-')
+                reference_point.append(reference_point_dir[key])
+
+        return reference_point
 
     def get_worklaod(self):
         wl = None
@@ -460,6 +488,22 @@ class DBEnv():
 
             return objs
 
+    def get_constraint(self, res):
+        if len(self.constraints) == 0 :
+             return None
+
+        locals().update(res)
+
+        constraintL = []
+
+        for constraint in self.constraints:
+            value = eval(constraint)
+            constraintL.append(value)
+
+        return constraintL
+
+
+
 
 
     def step_openbox(self, config):
@@ -481,7 +525,6 @@ class DBEnv():
         f.write(res)
         f.close()
 
-        constraint = None
 
         res = {
             'tps': metrics[0],
@@ -493,6 +536,7 @@ class DBEnv():
             'cpu': resource[0],
             'readIO': resource[1],
             'writeIO': resource[2],
+            'IO': resource[1] + resource[2],
             'virtualMem': resource[3],
             'physical': resource[4],
             'dirty': resource[5],
@@ -502,5 +546,6 @@ class DBEnv():
         }
 
         obj = self.get_obj(res)
+        constraint = self.get_constraint(res)
 
         return obj, constraint, res

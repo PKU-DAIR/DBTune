@@ -13,7 +13,7 @@ def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data
     seed = rng.randint(MAXINT)
     if func_str == 'prf':
         try:
-            from autotune.extractor.surrogate.base.rf_with_instances import RandomForestWithInstances
+            from autotune.optimizer.surrogate.base.rf_with_instances import RandomForestWithInstances
             return RandomForestWithInstances(types=types, bounds=bounds, seed=seed)
         except ModuleNotFoundError:
             from autotune.extractor.surrogate.base.rf_with_instances_sklearn import skRandomForestWithInstances

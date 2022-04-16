@@ -12,7 +12,7 @@ from collections import OrderedDict
 from tqdm import tqdm
 from openbox.utils.util_funcs import check_random_state
 from openbox.utils.logging_utils import get_logger
-from autotune.utils.history_container import HistoryContainer, MOHistoryContainer, MultiStartHistoryContainer
+from autotune.utils.history_container import HistoryContainer, MOHistoryContainer
 from openbox.utils.constants import MAXINT, SUCCESS
 from openbox.utils.samplers import SobolSampler, LatinHypercubeSampler
 from openbox.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
@@ -35,6 +35,8 @@ class PipleLine(BOBase):
 
     def __init__(self, objective_function: callable,
                  config_space,
+                 num_objs,
+                 num_constraints=0,
                  optimizer_type='MBO',
                  sample_strategy: str = 'bo',
                  max_runs=200,
@@ -51,8 +53,6 @@ class PipleLine(BOBase):
                  logging_dir='logs',
                  task_id='default_task_id',
                  random_state=None,
-                 num_objs=1,
-                 num_constraints=0,
                  selector_type='shap',
                  incremental='decrease',
                  incremental_step=4,
@@ -63,7 +63,6 @@ class PipleLine(BOBase):
                  ):
 
 
-        self.FAILED_PERF = [MAXINT] * num_objs
         super().__init__(objective_function, config_space, task_id=task_id, output_dir=logging_dir,
                          random_state=random_state, initial_runs=initial_runs, max_runs=max_runs,
                          runtime_limit=runtime_limit, sample_strategy=sample_strategy,
@@ -71,7 +70,7 @@ class PipleLine(BOBase):
 
         self.num_objs = num_objs
         self.num_constraints = num_constraints
-        self.FAILED_PERF = [MAXINT] * num_objs
+        self.FAILED_PERF = [MAXINT] * self.num_objs
         advisor_kwargs = advisor_kwargs or {}
         self.selector_type = selector_type
         self.optimizer_type = optimizer_type
@@ -86,7 +85,7 @@ class PipleLine(BOBase):
         if optimizer_type == 'MBO' or optimizer_type == 'SMAC':
             from autotune.optimizer.bo_optimizer import BO_Optimizer
             self.optimizer = BO_Optimizer(config_space,
-                                          num_objs=num_objs,
+                                          num_objs=self.num_objs,
                                           num_constraints=num_constraints,
                                           initial_trials=initial_runs,
                                           init_strategy=init_strategy,
@@ -101,14 +100,14 @@ class PipleLine(BOBase):
                                           **advisor_kwargs)
         elif optimizer_type == 'TPE':
             from autotune.optimizer.tpe_optimizer import TPE_Optimizer
-            assert num_objs == 1 and num_constraints == 0
+            assert self.num_objs == 1 and num_constraints == 0
             self.optimizer = TPE_Optimizer(config_space, task_id=task_id, random_state=random_state,
                                               **advisor_kwargs)
         elif optimizer_type == 'GA':
             from autotune.optimizer.ga_optimizer import GA_Optimizer
-            assert num_objs == 1 and num_constraints == 0
+            assert self.num_objs == 1 and num_constraints == 0
             self.optimizer = GA_Optimizer(config_space,
-                                             num_objs=num_objs,
+                                             num_objs=self.num_objs,
                                              num_constraints=num_constraints,
                                              optimization_strategy=sample_strategy,
                                              batch_size=1,
@@ -137,6 +136,7 @@ class PipleLine(BOBase):
                                             **advisor_kwargs)
         else:
             raise ValueError('Invalid advisor type!')
+
 
 
     def init_selector(self):

@@ -12,7 +12,7 @@ from collections import OrderedDict
 from tqdm import tqdm
 from openbox.utils.util_funcs import check_random_state
 from openbox.utils.logging_utils import get_logger
-from autotune.utils.history_container import HistoryContainer, MOHistoryContainer, MultiStartHistoryContainer
+from autotune.utils.history_container import HistoryContainer, MOHistoryContainer
 from openbox.utils.constants import MAXINT, SUCCESS
 from openbox.utils.samplers import SobolSampler, LatinHypercubeSampler
 from openbox.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
@@ -77,7 +77,10 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         self.config_space_all = config_space
 
         # init history container
-        self.history_container = HistoryContainer(task_id, self.num_constraints, config_space=self.config_space)
+        if self.num_objs == 1:
+            self.history_container = HistoryContainer(task_id, self.num_constraints, config_space=self.config_space)
+        else:  # multi-objectives
+            self.history_container = MOHistoryContainer(task_id, self.num_objs, self.num_constraints, self.config_space, ref_point)
 
         # initial design
         if initial_configurations is not None and len(initial_configurations) > 0:
@@ -233,17 +236,27 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
     def setup_bo_basics(self):
         """
-        Prepare the basic BO components.
-        Returns
-        -------
-        An optimizer object.
-        """
-
-        self.surrogate_model = build_surrogate(func_str=self.surrogate_type,
+                Prepare the basic BO components.
+                Returns
+                -------
+                An optimizer object.
+                """
+        if self.num_objs == 1 or self.acq_type == 'parego':
+            self.surrogate_model = build_surrogate(func_str=self.surrogate_type,
                                                    config_space=self.config_space,
                                                    rng=self.rng,
                                                    history_hpo_data=self.history_bo_data)
+        else:  # multi-objectives
+            self.surrogate_model = [build_surrogate(func_str=self.surrogate_type,
+                                                    config_space=self.config_space,
+                                                    rng=self.rng,
+                                                    history_hpo_data=self.history_bo_data)
+                                    for _ in range(self.num_objs)]
 
+        if self.num_constraints > 0:
+            self.constraint_models = [build_surrogate(func_str=self.constraint_surrogate_type,
+                                                      config_space=self.config_space,
+                                                      rng=self.rng) for _ in range(self.num_constraints)]
 
         if self.acq_type in ['mesmo', 'mesmoc', 'mesmoc2', 'usemo']:
             self.acquisition_function = build_acq_func(func_str=self.acq_type,
@@ -261,6 +274,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                                          acq_func=self.acquisition_function,
                                          config_space=self.config_space,
                                          rng=self.rng)
+
 
     def create_initial_design(self, init_strategy='default'):
         """
@@ -328,8 +342,22 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         Y = history_container.get_transformed_perfs()
         cY = history_container.get_transformed_constraint_perfs()
 
-        if self.optimization_strategy == 'bo':
+        if self.num_objs == 1:
             self.surrogate_model.train(X, Y)
+        elif self.acq_type == 'parego':
+            weights = self.rng.random_sample(self.num_objs)
+            weights = weights / np.sum(weights)
+            scalarized_obj = get_chebyshev_scalarization(weights, Y)
+            self.surrogate_model.train(X, scalarized_obj(Y))
+        else:  # multi-objectives
+            for i in range(self.num_objs):
+                self.surrogate_model[i].train(X, Y[:, i])
+
+            # train constraint model
+        for i in range(self.num_constraints):
+            self.constraint_models[i].train(X, cY[:, i])
+
+        return X, Y
 
 
     def get_suggestion(self, history_container=None, return_list=False):
@@ -343,7 +371,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         # if have enough data, get_suggorate
         num_config_evaluated = len(self.history_container.configurations)
         if num_config_evaluated >= self.init_num:
-            self.get_surrogate()
+            X, Y = self.get_surrogate()
 
         if history_container is None:
             history_container = self.history_container
@@ -371,6 +399,27 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                                                  constraint_models=self.constraint_models,
                                                  eta=incumbent_value,
                                                  num_data=num_config_evaluated)
+            else:  # multi-objectives
+                mo_incumbent_value = history_container.get_mo_incumbent_value()
+                if self.acq_type == 'parego':
+                    self.acquisition_function.update(model=self.surrogate_model,
+                                                     constraint_models=self.constraint_models,
+                                                     eta=scalarized_obj(np.atleast_2d(mo_incumbent_value)),
+                                                     num_data=num_config_evaluated)
+                elif self.acq_type.startswith('ehvi'):
+                    partitioning = NondominatedPartitioning(self.num_objs, Y)
+                    cell_bounds = partitioning.get_hypercell_bounds(ref_point=self.ref_point)
+                    self.acquisition_function.update(model=self.surrogate_model,
+                                                     constraint_models=self.constraint_models,
+                                                     cell_lower_bounds=cell_bounds[0],
+                                                     cell_upper_bounds=cell_bounds[1])
+                else:
+                    self.acquisition_function.update(model=self.surrogate_model,
+                                                     constraint_models=self.constraint_models,
+                                                     constraint_perfs=cY,  # for MESMOC
+                                                     eta=mo_incumbent_value,
+                                                     num_data=num_config_evaluated,
+                                                     X=X, Y=Y)
 
 
             # optimize acquisition function
