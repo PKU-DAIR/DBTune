@@ -10,14 +10,14 @@ import math
 from typing import List
 from collections import OrderedDict
 from tqdm import tqdm
-from openbox.utils.util_funcs import check_random_state
-from openbox.utils.logging_utils import get_logger
-from openbox.utils.history_container import HistoryContainer, MOHistoryContainer, \
+from autotune.utils.util_funcs import check_random_state
+from autotune.utils.logging_utils import get_logger
+from autotune.utils.history_container import HistoryContainer, MOHistoryContainer, \
     MultiStartHistoryContainer
-from openbox.utils.constants import MAXINT, SUCCESS
-from openbox.utils.samplers import SobolSampler, LatinHypercubeSampler
-from openbox.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
-from openbox.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.constants import MAXINT, SUCCESS
+from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
+from autotune.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
+from autotune.utils.config_space.util import convert_configurations_to_array
 from openbox.core.base import build_acq_func, build_optimizer, build_surrogate
 from openbox.core.base import Observation
 from autotune.pipleline.base import BOBase

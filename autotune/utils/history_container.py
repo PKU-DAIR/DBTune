@@ -6,12 +6,12 @@ import json
 import collections
 from typing import List, Union
 import numpy as np
-from openbox.utils.constants import MAXINT, SUCCESS
-from openbox.utils.config_space import Configuration, ConfigurationSpace
-from openbox.utils.logging_utils import get_logger
-from openbox.utils.multi_objective import Hypervolume, get_pareto_front
-from openbox.utils.config_space.space_utils import get_config_from_dict
-from openbox.utils.visualization.plot_convergence import plot_convergence
+from autotune.utils.constants import MAXINT, SUCCESS
+from autotune.utils.config_space import Configuration, ConfigurationSpace
+from autotune.utils.logging_utils import get_logger
+from autotune.utils.multi_objective import Hypervolume, get_pareto_front
+from autotune.utils.config_space.space_utils import get_config_from_dict
+from autotune.utils.visualization.plot_convergence import plot_convergence
 from autotune.utils.transform import  get_transform_function
 
 Perf = collections.namedtuple(
@@ -337,7 +337,7 @@ class HistoryContainer(object):
                 'https://open-box.readthedocs.io/en/latest/installation/install_pyrfr.html'
             )
             raise
-        from openbox.utils.fanova import fANOVA
+        from autotune.utils.fanova import fANOVA
         from terminaltables import AsciiTable
 
         if config_space is None:
@@ -582,4 +582,146 @@ class MOHistoryContainer(HistoryContainer):
 
     def visualize_jupyter(self, *args, **kwargs):
         raise NotImplementedError('visualize_jupyter only supports single objective!')
+
+
+
+class MultiStartHistoryContainer(object):
+    """
+    History container for multistart algorithms.
+    """
+
+    def __init__(self, task_id, num_objs=1, num_constraints=0, ref_point=None):
+        self.task_id = task_id
+        self.num_objs = num_objs
+        self.num_constraints = num_constraints
+        self.history_containers = []
+        self.ref_point = ref_point
+        self.current = None
+        self.restart()
+
+    def restart(self):
+        if self.num_objs == 1:
+            self.current = HistoryContainer(self.task_id, self.num_constraints)
+        else:
+            self.current = MOHistoryContainer(self.task_id, self.num_objs, self.num_constraints, self.ref_point)
+        self.history_containers.append(self.current)
+
+    def get_configs_for_all_restarts(self):
+        all_configs = []
+        for history_container in self.history_containers:
+            all_configs.extend(list(history_container.data.keys()))
+        return all_configs
+
+    def get_incumbents_for_all_restarts(self):
+        best_incumbents = []
+        best_incumbent_value = float('inf')
+        if self.num_objs == 1:
+            for hc in self.history_containers:
+                incumbents = hc.get_incumbents()
+                incumbent_value = hc.incumbent_value
+                if incumbent_value > best_incumbent_value:
+                    continue
+                elif incumbent_value < best_incumbent_value:
+                    best_incumbent_value = incumbent_value
+                best_incumbents.extend(incumbents)
+            return best_incumbents
+        else:
+            return self.get_pareto_front()
+
+    def get_pareto_front(self):
+        assert self.num_objs > 1
+        Y = np.vstack([hc.get_pareto_front() for hc in self.history_containers])
+        return get_pareto_front(Y).tolist()
+
+    def update_observation(self, observation: Observation):
+        return self.current.update_observation(observation)
+
+    def add(self, config: Configuration, perf: Perf):
+        self.current.add(config, perf)
+
+    @property
+    def configurations(self):
+        return self.current.configurations
+
+    @property
+    def perfs(self):
+        return self.current.perfs
+
+    @property
+    def constraint_perfs(self):
+        return self.current.constraint_perfs
+
+    @property
+    def trial_states(self):
+        return self.current.trial_states
+
+    @property
+    def successful_perfs(self):
+        return self.current.successful_perfs
+
+    def get_transformed_perfs(self):
+        return self.current.get_transformed_perfs
+
+    def get_transformed_constraint_perfs(self):
+        return self.current.get_transformed_constraint_perfs
+
+    def get_perf(self, config: Configuration):
+        for history_container in self.history_containers:
+            if config in history_container.data:
+                return self.data[config]
+        raise KeyError
+
+    def get_all_configs(self):
+        return self.current.get_all_configs()
+
+    def empty(self):
+        return self.current.config_counter == 0
+
+    def get_incumbents(self):
+        if self.num_objs == 1:
+            return self.current.incumbents
+        else:
+            return self.current.get_pareto()
+
+    def get_mo_incumbents(self):
+        assert self.num_objs > 1
+        return self.current.mo_incumbents
+
+    def get_mo_incumbent_value(self):
+        assert self.num_objs > 1
+        return self.current.mo_incumbent_value
+
+    def get_pareto(self):
+        assert self.num_objs > 1
+        return self.current.get_pareto()
+
+    def get_pareto_set(self):
+        assert self.num_objs > 1
+        return self.current.get_pareto_set()
+
+    def compute_hypervolume(self, ref_point=None):
+        assert self.num_objs > 1
+        return self.current.compute_hypervolume(ref_point)
+
+    def save_json(self, fn: str = "history_container.json"):
+        """
+        saves runhistory on disk
+
+        Parameters
+        ----------
+        fn : str
+            file name
+        """
+        self.current.save_json(fn)
+
+    def load_history_from_json(self, cs: ConfigurationSpace, fn: str = "history_container.json"):
+        """Load and runhistory in json representation from disk.
+        Parameters
+        ----------
+        fn : str
+            file name to load from
+        cs : ConfigSpace
+            instance of configuration space
+        """
+        self.current.load_history_from_json(cs, fn)
 

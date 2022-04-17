@@ -17,7 +17,7 @@ except ModuleNotFoundError:
     old_sk_version = False
 
 from openbox.surrogate.base.base_model import AbstractModel
-from openbox.utils.constants import N_TREES
+from autotune.utils.constants import N_TREES
 
 
 def _collect_prediction(predict, X, out, lock):

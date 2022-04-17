@@ -11,8 +11,8 @@ from sklearn.kernel_approximation import RBFSampler
 from openbox.acquisition_function.acquisition import AbstractAcquisitionFunction, Uncertainty
 from openbox.surrogate.base.base_model import AbstractModel
 from openbox.surrogate.base.gp import GaussianProcess
-from openbox.utils.platypus_utils import set_problem_types, get_variator
-from openbox.utils.constants import MAXINT
+from autotune.utils.platypus_utils import set_problem_types, get_variator
+from autotune.utils.constants import MAXINT
 
 from platypus import NSGAII, Problem, Real
 

@@ -1,7 +1,7 @@
 import sys
-from openbox.utils.constants import MAXINT, SUCCESS
+from autotune.utils.constants import MAXINT, SUCCESS
 from autotune.optimizer.acquisition_function import *
-from openbox.utils.util_funcs import get_types
+from autotune.utils.util_funcs import get_types
 
 
 acq_dict = {

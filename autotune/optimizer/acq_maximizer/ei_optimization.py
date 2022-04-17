@@ -15,12 +15,12 @@ import scipy
 import numpy as np
 
 from openbox.acquisition_function.acquisition import AbstractAcquisitionFunction
-from openbox.utils.config_space import get_one_exchange_neighbourhood, \
+from autotune.utils.config_space import get_one_exchange_neighbourhood, \
     Configuration, ConfigurationSpace
 from openbox.acq_maximizer.random_configuration_chooser import ChooserNoCoolDown, ChooserProb
-from openbox.utils.history_container import HistoryContainer, MultiStartHistoryContainer
-from openbox.utils.util_funcs import get_types
-from openbox.utils.constants import MAXINT
+from autotune.utils.history_container import HistoryContainer, MultiStartHistoryContainer
+from autotune.utils.util_funcs import get_types
+from autotune.utils.constants import MAXINT
 
 
 class AcquisitionFunctionMaximizer(object, metaclass=abc.ABCMeta):
@@ -66,7 +66,7 @@ class AcquisitionFunctionMaximizer(object, metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
         stats: ~openbox.stats.stats.Stats
             current stats object
@@ -96,7 +96,7 @@ class AcquisitionFunctionMaximizer(object, metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
         stats: ~openbox.stats.stats.Stats
             current stats object
@@ -253,7 +253,7 @@ class LocalSearch(AcquisitionFunctionMaximizer):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
         stats: ~openbox.stats.stats.Stats
             current stats object
@@ -394,7 +394,7 @@ class RandomSearch(AcquisitionFunctionMaximizer):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
         num_points: int
             number of points to be sampled
@@ -497,7 +497,7 @@ class InterleavedLocalAndRandomSearch(AcquisitionFunctionMaximizer):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
         num_points: int
             number of points to be sampled
@@ -985,7 +985,7 @@ class MESMO_Optimizer(AcquisitionFunctionMaximizer):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
         num_points: int
             number of points to be sampled

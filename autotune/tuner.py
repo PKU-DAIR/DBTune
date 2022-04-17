@@ -1,6 +1,6 @@
 import os
 import sys
-from openbox.utils.config_space import ConfigurationSpace, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
+from autotune.utils.config_space import ConfigurationSpace, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
 from autotune.workload_map import WorkloadMapping
 from autotune.pipleline.pipleline import PipleLine
 from .knobs import ts, logger

@@ -10,18 +10,18 @@ import math
 from typing import List
 from collections import OrderedDict
 from tqdm import tqdm
-from openbox.utils.util_funcs import check_random_state
-from openbox.utils.logging_utils import get_logger
+from autotune.utils.util_funcs import check_random_state
+from autotune.utils.logging_utils import get_logger
 from autotune.utils.history_container import HistoryContainer, MOHistoryContainer
-from openbox.utils.constants import MAXINT, SUCCESS
-from openbox.utils.samplers import SobolSampler, LatinHypercubeSampler
-from openbox.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
-from openbox.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.constants import MAXINT, SUCCESS
+from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
+from autotune.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
+from autotune.utils.config_space.util import convert_configurations_to_array
 from autotune.utils.history_container import Observation
 from autotune.pipleline.base import BOBase
-from openbox.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
-from openbox.utils.limit import time_limit, TimeoutException
-from openbox.utils.util_funcs import get_result
+from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
+from autotune.utils.limit import time_limit, TimeoutException
+from autotune.utils.util_funcs import get_result
 from autotune.selector.selector import SHAPSelector, fANOVASelector, GiniSelector, AblationSelector, LASSOSelector
 from autotune.optimizer.surrogate.core import build_surrogate, surrogate_switch
 from autotune.optimizer.core import build_acq_func, build_optimizer

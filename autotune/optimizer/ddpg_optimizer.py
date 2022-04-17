@@ -11,11 +11,11 @@ import statsmodels.api as sm
 import math
 
 from autotune.optimizer.surrogate.ddpg.ddpg import DDPG
-from openbox.utils.util_funcs import check_random_state
+from autotune.utils.util_funcs import check_random_state
 from autotune.utils.history_container import HistoryContainer
 from openbox.core.base import Observation
-from openbox.utils.config_space.util import convert_configurations_to_array
-from openbox.utils.config_space import ConfigurationSpace, Configuration, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
+from autotune.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.config_space import ConfigurationSpace, Configuration, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
 
 
 def create_output_folders():

@@ -3,11 +3,11 @@ import abc
 import numpy as np
 import random
 
-from openbox.utils.util_funcs import check_random_state
-from openbox.utils.logging_utils import get_logger
+from autotune.utils.util_funcs import check_random_state
+from autotune.utils.logging_utils import get_logger
 from autotune.utils.history_container import HistoryContainer
-from openbox.utils.constants import MAXINT, SUCCESS
-from openbox.utils.config_space import get_one_exchange_neighbourhood
+from autotune.utils.constants import MAXINT, SUCCESS
+from autotune.utils.config_space import get_one_exchange_neighbourhood
 from openbox.core.base import Observation
 
 
