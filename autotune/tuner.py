@@ -77,7 +77,7 @@ class DBTuner:
 
 
     def tune(self):
-        bo = PipleLine(self.env.step_openbox,
+        bo = PipleLine(self.env.step,
                        self.config_space,
                        num_objs=len(self.objs),
                        num_constraints=len(self.constraints),

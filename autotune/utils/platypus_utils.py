@@ -6,7 +6,7 @@ from ConfigSpace.hyperparameters import CategoricalHyperparameter, \
 from ConfigSpace import Configuration
 from platypus import Real, Integer
 from platypus.operators import CompoundOperator, SBX, PM, HUX, BitFlip
-from openbox.utils.util_funcs import get_result
+from autotune.utils.util_funcs import get_result
 
 
 def get_variator(config_space):
