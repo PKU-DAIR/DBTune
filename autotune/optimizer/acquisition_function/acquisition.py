@@ -16,8 +16,8 @@ import math
 
 from autotune.utils.config_space import Configuration
 from autotune.utils.config_space.util import convert_configurations_to_array
-from openbox.surrogate.base.base_model import AbstractModel
-from openbox.surrogate.base.gp import GaussianProcess
+from autotune.optimizer.surrogate.base.base_model import AbstractModel
+from autotune.optimizer.surrogate.base.gp import GaussianProcess
 
 
 class AbstractAcquisitionFunction(object, metaclass=abc.ABCMeta):

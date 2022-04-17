@@ -4,7 +4,7 @@ from ConfigSpace import Configuration, ConfigurationSpace
 from ConfigSpace import ConfigurationSpace, Configuration, Constant,\
      CategoricalHyperparameter, UniformFloatHyperparameter, \
      UniformIntegerHyperparameter, InCondition
-from openbox.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.config_space.util import convert_configurations_to_array
 from ConfigSpace.util import get_one_exchange_neighbourhood
 
 import warnings

@@ -2,8 +2,8 @@
 # Copyright (c) 2016-2018, Ml4AAD Group (http://www.ml4aad.org/)
 
 import numpy as np
-from openbox.surrogate.base.base_model import AbstractModel
-from openbox.surrogate.base.rf_with_instances import RandomForestWithInstances
+from autotune.optimizer.surrogate.base.base_model import AbstractModel
+from autotune.optimizer.surrogate.base.rf_with_instances import RandomForestWithInstances
 
 
 class RandomForestEnsemble(AbstractModel):

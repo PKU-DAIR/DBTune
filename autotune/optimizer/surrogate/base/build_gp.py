@@ -3,9 +3,9 @@
 
 import numpy as np
 from autotune.optimizer.surrogate.base.gp import GaussianProcess
-from openbox.surrogate.base.gp_mcmc import GaussianProcessMCMC
-from openbox.surrogate.base.gp_base_prior import HorseshoePrior, LognormalPrior
-from openbox.surrogate.base.gp_kernels import ConstantKernel, Matern, HammingKernel, WhiteKernel, RBF
+from autotune.optimizer.surrogate.base.gp_mcmc import GaussianProcessMCMC
+from autotune.optimizer.surrogate.base.gp_base_prior import HorseshoePrior, LognormalPrior
+from autotune.optimizer.surrogate.base.gp_kernels import ConstantKernel, Matern, HammingKernel, WhiteKernel, RBF
 
 
 def create_gp_model(model_type, config_space, types, bounds, rng):

@@ -7,7 +7,7 @@ import typing
 import numpy as np
 from pyrfr import regression
 
-from openbox.surrogate.base.base_model import  AbstractModel
+from autotune.optimizer.surrogate.base.base_model import  AbstractModel
 from autotune.utils.constants import N_TREES
 
 

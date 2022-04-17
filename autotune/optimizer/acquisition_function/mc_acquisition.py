@@ -4,9 +4,9 @@ from typing import List
 
 import numpy as np
 
-from openbox.acquisition_function.acquisition import AbstractAcquisitionFunction
-from openbox.surrogate.base.base_model import AbstractModel
-from openbox.surrogate.base.gp import GaussianProcess
+from autotune.optimizer.acquisition_function.acquisition import AbstractAcquisitionFunction
+from autotune.optimizer.surrogate.base.base_model import AbstractModel
+from autotune.optimizer.surrogate.base.gp import GaussianProcess
 
 
 class MCEI(AbstractAcquisitionFunction):

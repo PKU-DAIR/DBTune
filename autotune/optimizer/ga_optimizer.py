@@ -8,7 +8,7 @@ from autotune.utils.logging_utils import get_logger
 from autotune.utils.history_container import HistoryContainer
 from autotune.utils.constants import MAXINT, SUCCESS
 from autotune.utils.config_space import get_one_exchange_neighbourhood
-from openbox.core.base import Observation
+from autotune.core.base import Observation
 
 
 class GA_Optimizer(object, metaclass=abc.ABCMeta):

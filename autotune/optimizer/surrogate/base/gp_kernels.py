@@ -11,7 +11,7 @@ import scipy.optimize
 import scipy.spatial.distance
 import scipy.special
 
-from openbox.surrogate.base.gp_base_prior import Prior
+from autotune.optimizer.surrogate.base.gp_base_prior import Prior
 import skopt.learning.gaussian_process.kernels as kernels
 
 

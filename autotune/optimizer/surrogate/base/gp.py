@@ -8,8 +8,8 @@ import numpy as np
 from scipy import optimize
 
 from ConfigSpace import ConfigurationSpace
-from openbox.surrogate.base.base_gp import BaseGP
-from openbox.surrogate.base.gp_base_prior import Prior
+from autotune.optimizer.surrogate.base.base_gp import BaseGP
+from autotune.optimizer.surrogate.base.gp_base_prior import Prior
 from autotune.utils.constants import VERY_SMALL_NUMBER
 
 from skopt.learning.gaussian_process.kernels import Kernel

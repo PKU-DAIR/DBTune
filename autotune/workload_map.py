@@ -237,8 +237,8 @@ class WorkloadMapping:
         if not flag:
             return False, None
 
-        from openbox.utils.config_space import Configuration
-        from openbox.utils.config_space.util import convert_configurations_to_array
+        from autotune.utils.config_space import Configuration
+        from autotune.utils.config_space.util import convert_configurations_to_array
         configL, YL = [], []
 
         for i in range(0, matched_knob.shape[0] ):

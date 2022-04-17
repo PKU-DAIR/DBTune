@@ -4,7 +4,7 @@ import numpy as np
 from typing import List
 from collections import OrderedDict
 from sklearn.model_selection import KFold
-from openbox.surrogate.tlbo.base import BaseTLSurrogate
+from autotune.optimizer.surrogate.tlbo.base import BaseTLSurrogate
 
 _scale_method = 'standardize'
 

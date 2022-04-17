@@ -18,12 +18,12 @@ from autotune.utils.constants import MAXINT, SUCCESS
 from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
 from autotune.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
 from autotune.utils.config_space.util import convert_configurations_to_array
-from openbox.core.base import build_acq_func, build_optimizer, build_surrogate
-from openbox.core.base import Observation
+from autotune.core.base import build_acq_func, build_optimizer, build_surrogate
+from autotune.core.base import Observation
 from autotune.pipleline.base import BOBase
-from openbox.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
-from openbox.utils.limit import time_limit, TimeoutException
-from openbox.utils.util_funcs import get_result
+from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
+from autotune.utils.limit import time_limit, TimeoutException
+from autotune.utils.util_funcs import get_result
 
 
 class Advisor(BOBase):

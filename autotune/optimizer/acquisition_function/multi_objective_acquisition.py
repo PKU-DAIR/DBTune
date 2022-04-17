@@ -8,9 +8,9 @@ import numpy as np
 from scipy.stats import norm
 from sklearn.kernel_approximation import RBFSampler
 
-from openbox.acquisition_function.acquisition import AbstractAcquisitionFunction, Uncertainty
-from openbox.surrogate.base.base_model import AbstractModel
-from openbox.surrogate.base.gp import GaussianProcess
+from autotune.optimizer.acquisition_function.acquisition import AbstractAcquisitionFunction, Uncertainty
+from autotune.optimizer.surrogate.base.base_model import AbstractModel
+from autotune.optimizer.surrogate.base.gp import GaussianProcess
 from autotune.utils.platypus_utils import set_problem_types, get_variator
 from autotune.utils.constants import MAXINT
 
@@ -277,7 +277,7 @@ class MESMO(AbstractAcquisitionFunction):
         model : List[AbstractEPM]
             A list of surrogate that implements at least
                  - predict_marginalized_over_instances(X)
-        config_space : openbox.space.Space
+        config_space : autotune.space.Space
             Configuration space
         sample_num : int
             Number of Monte-Carlo samples.
@@ -388,7 +388,7 @@ class MESMOC(AbstractAcquisitionFunction):
         constraint_models : List[AbstractEPM]
             A list of constraint surrogate that implements at least
                  - predict_marginalized_over_instances(X)
-        config_space : openbox.space.Space
+        config_space : autotune.space.Space
             Configuration space
         sample_num : int
             Number of Monte-Carlo samples.
@@ -528,7 +528,7 @@ class MESMOC2(MESMO):
         constraint_models : List[AbstractEPM]
             A list of constraint surrogate that implements at least
                  - predict_marginalized_over_instances(X)
-        config_space : openbox.space.Space
+        config_space : autotune.space.Space
             Configuration space
         sample_num : int
             Number of Monte-Carlo samples.
@@ -583,7 +583,7 @@ class USeMO(AbstractAcquisitionFunction):
         model : List[AbstractEPM]
             A list of surrogate that implements at least
                  - predict_marginalized_over_instances(X)
-        config_space : openbox.space.Space
+        config_space : autotune.space.Space
             Configuration space
         random_state : int
             Random seed for RNG.
@@ -596,7 +596,7 @@ class USeMO(AbstractAcquisitionFunction):
         self.rng = np.random.RandomState(random_state)
         random.seed(self.rng.randint(MAXINT))
         self.config_space = config_space
-        from openbox.core.base import build_acq_func
+        from autotune.core.base import build_acq_func
         self.single_acq = [build_acq_func(func_str=acq_type, model=m) for m in model]
         self.uncertainty_acq = [Uncertainty(model=m) for m in model]
         self.X = None

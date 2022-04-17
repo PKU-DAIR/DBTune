@@ -1,6 +1,6 @@
 import sys
 from autotune.utils.constants import MAXINT, SUCCESS
-from openbox.acquisition_function import *
+from autotune.optimizer.acquisition_function import *
 from autotune.utils.util_funcs import get_types
 
 

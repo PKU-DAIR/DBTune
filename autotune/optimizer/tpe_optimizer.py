@@ -9,7 +9,7 @@ import statsmodels.api as sm
 
 from autotune.utils.util_funcs import check_random_state
 from autotune.utils.history_container import HistoryContainer
-from openbox.core.base import Observation
+from autotune.core.base import Observation
 from autotune.utils.config_space.util import convert_configurations_to_array
 
 

@@ -1,6 +1,6 @@
 # License: MIT
 
-from openbox.acquisition_function.acquisition import (
+from autotune.optimizer.acquisition_function.acquisition import (
     AbstractAcquisitionFunction,
     EI,
     EIC,
@@ -12,7 +12,7 @@ from openbox.acquisition_function.acquisition import (
     Uncertainty,
 )
 
-from openbox.acquisition_function.multi_objective_acquisition import (
+from autotune.optimizer.acquisition_function.multi_objective_acquisition import (
     EHVI,
     EHVIC,
     MESMO,
@@ -21,12 +21,12 @@ from openbox.acquisition_function.multi_objective_acquisition import (
     USeMO,
 )
 
-from openbox.acquisition_function.mc_acquisition import (
+from autotune.optimizer.acquisition_function.mc_acquisition import (
     MCEI,
     MCEIC,
 )
 
-from openbox.acquisition_function.mc_multi_objective_acquisition import (
+from autotune.optimizer.acquisition_function.mc_multi_objective_acquisition import (
     MCParEGO,
     MCParEGOC,
     MCEHVI,

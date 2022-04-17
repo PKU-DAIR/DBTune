@@ -3,8 +3,8 @@
 import numpy as np
 from skopt.sampler import Sobol, Lhs
 
-from openbox.utils.config_space import ConfigurationSpace, Configuration
-from openbox.utils.util_funcs import get_types, check_random_state
+from autotune.utils.config_space import ConfigurationSpace, Configuration
+from autotune.utils.util_funcs import get_types, check_random_state
 from ConfigSpace.hyperparameters import CategoricalHyperparameter, \
     UniformFloatHyperparameter, UniformIntegerHyperparameter, Constant, \
     OrdinalHyperparameter
