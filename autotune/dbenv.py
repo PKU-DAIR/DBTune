@@ -57,6 +57,7 @@ class DBEnv():
             self.reinit = False
         self.generate_time()
         self.y_variable = eval(args['performance_metric'])[0]
+        self.c_variables = eval(args_tune['constraints'])
         self.lhs_log = args['lhs_log']
         self.cpu_core = args['cpu_core']
 
@@ -624,13 +625,16 @@ class DBEnv():
 
         constraint = None
 
-        res = {
+        external_metrics = {
             'tps': metrics[0],
             'lat': metrics[1],
             'qps': metrics[2],
             'tpsVar': metrics[3],
             'latVar': metrics[4],
             'qpsVar': metrics[5],
+        }
+
+        resource = {
             'cpu': resource[0],
             'readIO': resource[1],
             'writeIO': resource[2],
@@ -639,7 +643,11 @@ class DBEnv():
             'dirty': resource[5],
             'hit': resource[6],
             'data': resource[7],
-            'IM': list(internal_metrics)
         }
 
-        return (obj, ), constraint, res
+        info = {
+            'objs': self.y_variable,
+            'constraints': self.c_variables
+        }
+
+        return (obj, ), constraint, external_metrics, resource, list(internal_metrics), info

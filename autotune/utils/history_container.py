@@ -12,18 +12,19 @@ from openbox.utils.logging_utils import get_logger
 from openbox.utils.multi_objective import Hypervolume, get_pareto_front
 from openbox.utils.config_space.space_utils import get_config_from_dict
 from openbox.utils.visualization.plot_convergence import plot_convergence
-from autotune.utils.transform import  get_transform_function
+from autotune.utils.transform import get_transform_function
 
 Perf = collections.namedtuple(
     'perf', ['cost', 'time', 'status', 'additional_info'])
 
 Observation = collections.namedtuple(
-    'Observation', ['config', 'trial_state', 'constraints', 'objs', 'elapsed_time', 'res_dict'])
+    'Observation', ['config', 'trial_state', 'constraints', 'objs', 'elapsed_time', 'EM', 'IM', 'resource', 'info'])
 
 
 class HistoryContainer(object):
     def __init__(self, task_id, num_constraints=0, config_space=None):
         self.task_id = task_id
+        self.info = None
         self.config_space = config_space  # for show_importance
         self.config_space_all = config_space
         self.data = collections.OrderedDict()  # only successful data
@@ -41,7 +42,9 @@ class HistoryContainer(object):
         self.constraint_perfs = list()  # all constraints
         self.trial_states = list()  # all trial states
         self.elapsed_times = list()  # all elapsed times
+        self.external_metrics = list() # all external metrics
         self.internal_metrics = list() # all internal metrics
+        self.resource = list() # all resource information
 
         self.update_times = list()  # record all update times
 
@@ -74,8 +77,13 @@ class HistoryContainer(object):
         constraints = observation.constraints
         trial_state = observation.trial_state
         elapsed_time = observation.elapsed_time
-        internal_metrics = observation.res_dict['IM']
+        internal_metrics = observation.IM
+        external_metrics = observation.EM
+        resource = observation.resource
+        info = observation.info
 
+        if not self.info:
+            self.info = info
         self.configurations.append(config)
         self.configurations_all.append((self.fill_default_value(config)))
         self.perfs.append(objs[0])
@@ -83,6 +91,8 @@ class HistoryContainer(object):
         self.constraint_perfs.append(constraints)  # None if no constraint
         self.elapsed_times.append(elapsed_time)
         self.internal_metrics.append(internal_metrics)
+        self.external_metrics.append(external_metrics)
+        self.resource.append(resource)
 
         transform_perf = False
         failed = False
@@ -99,22 +109,10 @@ class HistoryContainer(object):
                     feasible = False
 
                 self.successful_perfs.append(objs[0])
-                if config in self.data:
-                    self.logger.warning('Repeated configuration detected!')
+                if feasible:
+                    self.add(config, objs[0])
                 else:
-                    self.data[config] = observation.res_dict
-                    self.data_all[self.fill_default_value(config)] = observation.res_dict
-                    self.config_counter += 1
-
-                    if len(self.incumbents) > 0:
-                        if objs[0] < self.incumbent_value:
-                            self.incumbents.clear()
-                        if objs[0] <= self.incumbent_value:
-                            self.incumbents.append((config, objs[0]))
-                            self.incumbent_value = objs[0]
-                    else:
-                        self.incumbent_value = objs[0]
-                        self.incumbents.append((config, objs[0]))
+                    self.add(config, MAXINT)
 
                 self.perc = np.percentile(self.successful_perfs, self.scale_perc, axis=0)
                 self.min_y = np.min(self.successful_perfs, axis=0).tolist()
@@ -406,35 +404,22 @@ class HistoryContainer(object):
         return importance_table
 
     def save_json(self, fn: str = "history_container.json"):
-        """
-        saves runhistory on disk
-
-        Parameters
-        ----------
-        fn : str
-            file name
-        """
-        all_data = []
-
-        for config, res in self.data.items():
-            data = collections.OrderedDict()
-            data['config'] = config.get_dictionary()
-            for k, v in res.items():
-                data[k] = v
-            all_data.append(data)
+        data = []
+        for i in range(len(self.perfs)):
+            tmp = {
+                'configuration': self.configurations[i].get_dictionary(),
+                'external_metrics': self.external_metrics[i],
+                'internal_metrics': self.internal_metrics[i],
+                'resource': self.resource[i],
+                'trial_state': self.trial_states[i],
+                'elapsed_time': self.elapsed_times[i]
+            }
+            data.append(tmp)
 
         with open(fn, "w") as fp:
-            json.dump({"data": all_data}, fp, indent=2)
+            json.dump({"info": self.info,  "data": data}, fp, indent=2)
 
-    def load_history_from_json(self, cs: ConfigurationSpace, fn: str = "history_container.json"):  # todo: all configs
-        """Load and runhistory in json representation from disk.
-        Parameters
-        ----------
-        fn : str
-            file name to load from
-        cs : ConfigSpace
-            instance of configuration space
-        """
+    def load_history_from_json(self, fn: str = "history_container.json"):  # todo: all configs
         try:
             with open(fn) as fp:
                 all_data = json.load(fp)
@@ -444,17 +429,73 @@ class HistoryContainer(object):
                 'Not adding any runs!', e, fn,
             )
             return
-        _history_data = collections.OrderedDict()
-        # important to use add method to use all data structure correctly
-        for k, v in all_data["data"]:
-            config = get_config_from_dict(k, cs)
-            perf = float(v)
-            _history_data[config] = perf
 
-        for data in all_data["data"]:
-            config = get_config_from_dict(data['config'], cs)
-            _history_data[config] = data
-        return _history_data
+        info = all_data["info"]
+        data = all_data["data"]
+
+        y_variable = info['objs']
+        c_variables = info['constraints']
+        self.num_constraints = len(c_variables)
+        self.info = info
+
+        for tmp in data:
+            config = Configuration(self.config_space, tmp['configuration'])
+            em = tmp['external_metrics']
+            im = tmp['internal_metrics']
+            resource = tmp['resource']
+            trial_state = tmp['trial_state']
+            elapsed_time = tmp['elapsed_time']
+
+            self.configurations.append(config)
+            self.configurations_all.append(self.fill_default_value(config))
+            self.perfs.append(em[y_variable])
+            self.trial_states.append(trial_state)
+            constraints = []
+            for c in c_variables:
+                if c in em.keys():
+                    constraints.append(em[c])
+                else:
+                    constraints.append(resource[c])
+            self.constraint_perfs.append(constraints)
+            self.elapsed_times.append(elapsed_time)
+            self.internal_metrics.append(im)
+            self.external_metrics.append(em)
+            self.resource.append(resource)
+
+            transform_perf = False
+            failed = False
+            if trial_state == SUCCESS and em[y_variable] < MAXINT:
+                if self.num_constraints > 0 and constraints is None:
+                    self.logger.error('Constraint is None in a SUCCESS trial!')
+                    failed = True
+                    transform_perf = True
+                else:
+                    # If infeasible, transform perf to the largest found objective value
+                    feasible = True
+                    if self.num_constraints > 0 and any(c > 0 for c in constraints):
+                        transform_perf = True
+                        feasible = False
+
+                    self.successful_perfs.append(em[y_variable])
+                    if feasible:
+                        self.add(config, em[y_variable])
+                    else:
+                        self.add(config, MAXINT)
+
+                    self.perc = np.percentile(self.successful_perfs, self.scale_perc, axis=0)
+                    self.min_y = np.min(self.successful_perfs, axis=0).tolist()
+                    self.max_y = np.max(self.successful_perfs, axis=0).tolist()
+
+            else:
+                # failed trial
+                failed = True
+                transform_perf = True
+
+            cur_idx = len(self.perfs) - 1
+            if transform_perf:
+                self.transform_perf_index.append(cur_idx)
+            if failed:
+                self.failed_index.append(cur_idx)
 
     def alter_configuration_space(self, new_sapce: ConfigurationSpace):
         configurations = []

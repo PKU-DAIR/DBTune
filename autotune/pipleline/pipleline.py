@@ -247,7 +247,7 @@ class PipleLine(BOBase):
                 else:
                     # parse result
                     # objs, constraints = get_result(_result)
-                    objs, constraints, res = _result
+                    objs, constraints, em, resource, im, info = _result
             except Exception as e:
                 # parse result of failed trial
                 if isinstance(e, TimeoutException):
@@ -258,13 +258,13 @@ class PipleLine(BOBase):
                     trial_state = FAILED
                 objs = self.FAILED_PERF
                 constraints = None
-                res = None
+                em, resource, im, info = None, None, None, None
 
             elapsed_time = time.time() - start_time
             # update observation to advisor
             observation = Observation(
                 config=config, objs=objs, constraints=constraints,
-                trial_state=trial_state, elapsed_time=elapsed_time, res_dict=res
+                trial_state=trial_state, elapsed_time=elapsed_time, EM=em, resource=resource, IM=im, info=info
             )
 
             if _time_limit_per_trial != self.time_limit_per_trial and trial_state == TIMEOUT:
