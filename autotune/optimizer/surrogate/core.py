@@ -13,25 +13,25 @@ def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data
     seed = rng.randint(MAXINT)
     if func_str == 'prf':
         try:
-            from autotune.extractor.surrogate.base.rf_with_instances import RandomForestWithInstances
+            from autotune.optimizer.surrogate.base.rf_with_instances import RandomForestWithInstances
             return RandomForestWithInstances(types=types, bounds=bounds, seed=seed)
         except ModuleNotFoundError:
-            from autotune.extractor.surrogate.base.rf_with_instances_sklearn import skRandomForestWithInstances
+            from autotune.optimizer.surrogate.base.rf_with_instances_sklearn import skRandomForestWithInstances
             print('[Build Surrogate] Use probabilistic random forest based on scikit-learn. For better performance, '
                   'please install pyrfr: '
                   'https://open-box.readthedocs.io/en/latest/installation/install_pyrfr.html')
             return skRandomForestWithInstances(types=types, bounds=bounds, seed=seed)
 
     elif func_str == 'sk_prf':
-        from autotune.extractor.surrogate.base.rf_with_instances_sklearn import skRandomForestWithInstances
+        from autotune.optimizer.surrogate.base.rf_with_instances_sklearn import skRandomForestWithInstances
         return skRandomForestWithInstances(types=types, bounds=bounds, seed=seed)
 
     elif func_str == 'lightgbm':
-        from autotune.extractor.surrogate.lightgbm import LightGBM
+        from autotune.optimizer.surrogate.lightgbm import LightGBM
         return LightGBM(config_space, types=types, bounds=bounds, seed=seed)
 
     if func_str == 'random_forest':
-        from autotune.extractor.surrogate.skrf import RandomForestSurrogate
+        from autotune.optimizer.surrogate.skrf import RandomForestSurrogate
         return RandomForestSurrogate(config_space, types=types, bounds=bounds, seed=seed)
 
     elif func_str.startswith('gp'):
@@ -42,7 +42,7 @@ def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data
                                bounds=bounds,
                                rng=rng)
     elif func_str.startswith('mfgpe'):
-        from autotune.extractor.surrogate.tlbo.mfgpe import MFGPE
+        from autotune.transfer.tlbo.mfgpe import MFGPE
         inner_surrogate_type = 'prf'
         return MFGPE(config_space, history_hpo_data, seed,
                      surrogate_type=inner_surrogate_type, num_src_hpo_trial=-1)
@@ -63,6 +63,11 @@ def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data
             inner_surrogate_type = func_str.split('_')[-1]
             return TOPO_V3(config_space, history_hpo_data, seed,
                            surrogate_type=inner_surrogate_type, num_src_hpo_trial=-1)
+        elif 'mapping' in func_str:
+            from autotune.transfer.tlbo.workload_map import WorkloadMapping
+            inner_surrogate_type = func_str.split('_')[-1]
+            return WorkloadMapping(config_space, history_hpo_data, seed,
+                                   surrogate_type=inner_surrogate_type, num_src_hpo_trial=-1)
         else:
             raise ValueError('Invalid string %s for tlbo surrogate!' % func_str)
     else:

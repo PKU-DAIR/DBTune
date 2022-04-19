@@ -27,6 +27,7 @@ from autotune.optimizer.surrogate.core import build_surrogate, surrogate_switch
 from autotune.optimizer.core import build_acq_func, build_optimizer
 import pdb
 
+
 class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
     def __init__(self,
@@ -45,7 +46,6 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                  num_constraints=0,
                  initial_trials=3,
                  rand_prob=0.1):
-
 
         # Create output (logging) directory.
         # Init logging module.
@@ -96,14 +96,10 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         self.check_setup()
         self.setup_bo_basics()
 
-
     def alter_config_space(self, new_config_space):
         self.config_space = new_config_space
         self.history_container.alter_configuration_space(new_config_space)
         self.setup_bo_basics()
-
-
-
 
     def algo_auto_selection(self):
         from ConfigSpace import UniformFloatHyperparameter, UniformIntegerHyperparameter, \
@@ -140,17 +136,17 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
             if self.num_objs == 1:  # single objective
                 if self.num_constraints == 0:
                     self.acq_type = 'ei'
-                else:   # with constraints
+                else:  # with constraints
                     self.acq_type = 'eic'
-            elif self.num_objs <= 4:    # multi objective (<=4)
+            elif self.num_objs <= 4:  # multi objective (<=4)
                 if self.num_constraints == 0:
                     self.acq_type = 'ehvi'
-                else:   # with constraints
+                else:  # with constraints
                     self.acq_type = 'ehvic'
-            else:   # multi objective (>4)
+            else:  # multi objective (>4)
                 if self.num_constraints == 0:
                     self.acq_type = 'mesmo'
-                else:   # with constraints
+                else:  # with constraints
                     self.acq_type = 'mesmoc'
                 self.surrogate_type = 'gp_rbf'
                 info_str = ' surrogate_type: %s.' % self.surrogate_type
@@ -240,10 +236,9 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         """
 
         self.surrogate_model = build_surrogate(func_str=self.surrogate_type,
-                                                   config_space=self.config_space,
-                                                   rng=self.rng,
-                                                   history_hpo_data=self.history_bo_data)
-
+                                               config_space=self.config_space,
+                                               rng=self.rng,
+                                               history_hpo_data=self.history_bo_data)
 
         if self.acq_type in ['mesmo', 'mesmoc', 'mesmoc2', 'usemo']:
             self.acquisition_function = build_acq_func(func_str=self.acq_type,
@@ -318,18 +313,20 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
         return initial_configs
 
-
     def get_surrogate(self, history_container=None):
 
         if history_container is None:
             history_container = self.history_container
 
-        X = convert_configurations_to_array(history_container.configurations)
-        Y = history_container.get_transformed_perfs()
-        cY = history_container.get_transformed_constraint_perfs()
-
         if self.optimization_strategy == 'bo':
-            self.surrogate_model.train(X, Y)
+            # TODO: different train interface
+            if self.surrogate_type.startswith('tlbo_'):
+                self.surrogate_model.train(history_container)
+            else:
+                X = convert_configurations_to_array(history_container.configurations)
+                Y = history_container.get_transformed_perfs()
+                cY = history_container.get_transformed_constraint_perfs()
+                self.surrogate_model.train(X, Y)
 
 
     def get_suggestion(self, history_container=None, return_list=False):
@@ -372,7 +369,6 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                                                  eta=incumbent_value,
                                                  num_data=num_config_evaluated)
 
-
             # optimize acquisition function
             challengers = self.optimizer.maximize(runhistory=history_container,
                                                   num_points=5000)
@@ -384,7 +380,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                 if config not in history_container.configurations:
                     return config
             self.logger.warning('Cannot get non duplicate configuration from BO candidates (len=%d). '
-                                'Sample random config.' % (len(challengers.challengers), ))
+                                'Sample random config.' % (len(challengers.challengers),))
             return self.sample_random_configs(1, history_container)[0]
         else:
             raise ValueError('Unknown optimization strategy: %s.' % self.optimization_strategy)
@@ -435,13 +431,3 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                 configs.append(config)
                 sample_cnt = 0
         return configs
-
-
-
-    def get_suggestions(self):
-        raise NotImplementedError
-
-
-
-
-

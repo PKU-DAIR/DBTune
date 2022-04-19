@@ -58,6 +58,7 @@ class PipleLine(BOBase):
                  incremental_step=4,
                  incremental_num=1,
                  num_hps=5,
+                 num_metrics=65,
                  advisor_kwargs: dict = None,
                  **kwargs
                  ):
@@ -81,6 +82,7 @@ class PipleLine(BOBase):
         self.incremental_num = incremental_num  # how many knobs to increment each time
         self.num_hps = num_hps  # initial number of knobs before incremental tuning
         self.num_hps_max = len(self.config_space_all.get_hyperparameters())
+        self.num_metrics = num_metrics
         self.init_selector()
 
         if optimizer_type == 'MBO' or optimizer_type == 'SMAC':
@@ -125,16 +127,20 @@ class PipleLine(BOBase):
                                                 task_id=task_id,
                                                 **advisor_kwargs)
         elif optimizer_type == 'DDPG':
-            if self.num_hps == len(self. config_space._hyperparameters.keys()):
+            if self.num_hps == len(self.config_space._hyperparameters.keys()):
                 initial_runs = 0
             from autotune.optimizer.ddpg_optimizer import DDPG_Optimizer
             self.optimizer = DDPG_Optimizer(config_space,
-                                            num_hps,
+                                            knobs_num=num_hps,
+                                            metrics_num=num_metrics,
+                                            task_id=task_id,
                                             initial_trials=initial_runs,
                                             init_strategy=init_strategy,
                                             initial_configurations=initial_configurations,
-                                            task_id=task_id,
-                                            **advisor_kwargs)
+                                            params=kwargs['params'],
+                                            batch_size=kwargs['batch_size'],
+                                            mean_var_file=kwargs['mean_var_file']
+                                            )
         else:
             raise ValueError('Invalid advisor type!')
 

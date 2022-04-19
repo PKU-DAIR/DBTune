@@ -229,7 +229,7 @@ def gen_continuous(action):
                 eval_value = all_vals[indx]
             # TODO(Hong): add restriction among knobs, truncate, etc
             knobs[name] = eval_value
-        if knob_type == 'float':
+        elif knob_type == 'float':
             min_val, max_val = value['min'], value['max']
             delta = (max_val - min_val) * action[idx]
             eval_value = min_val + delta

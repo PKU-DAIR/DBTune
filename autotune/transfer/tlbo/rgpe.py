@@ -2,6 +2,8 @@
 
 import numpy as np
 from autotune.transfer.tlbo.base import BaseTLSurrogate
+from autotune.utils.history_container import HistoryContainer
+from openbox.utils.config_space.util import convert_configurations_to_array
 
 
 class RGPE(BaseTLSurrogate):
@@ -25,7 +27,10 @@ class RGPE(BaseTLSurrogate):
         self.hist_ws = list()
         self.iteration_id = 0
 
-    def train(self, X: np.ndarray, y: np.array):
+    def train(self, target_hpo_data: HistoryContainer):
+        X = convert_configurations_to_array(target_hpo_data.configurations)
+        y = target_hpo_data.get_transformed_perfs()
+
         # Build the target surrogate.
         self.target_surrogate = self.build_single_surrogate(X, y, normalize='standardize')
         if self.source_hpo_data is None:

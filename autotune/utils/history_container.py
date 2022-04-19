@@ -181,6 +181,9 @@ class HistoryContainer(object):
             transformed_constraint_perfs = bilog(transformed_constraint_perfs)
         return transformed_constraint_perfs
 
+    def get_internal_metrics(self):
+        return self.internal_metrics
+
     def get_perf(self, config: Configuration):
         return self.data[config]
 
@@ -438,8 +441,20 @@ class HistoryContainer(object):
         self.num_constraints = len(c_variables)
         self.info = info
 
+        knobs_source = data[0]['configuration'].keys()
+        knobs_target = self.config_space.get_hyperparameter_names()
+        knobs_delete = [knob for knob in knobs_source if knob not in knobs_target]
+        knobs_add = [knob for knob in knobs_target if knob not in knobs_source]
+        knobs_default = self.config_space.get_default_configuration().get_dictionary()
+
         for tmp in data:
-            config = Configuration(self.config_space, tmp['configuration'])
+            config_dict = tmp['configuration'].copy()
+            for knob in knobs_delete:
+                config_dict.pop(knob)
+            for knob in knobs_add:
+                config_dict[knob] = knobs_default[knob]
+
+            config = Configuration(self.config_space, config_dict)
             em = tmp['external_metrics']
             im = tmp['internal_metrics']
             resource = tmp['resource']

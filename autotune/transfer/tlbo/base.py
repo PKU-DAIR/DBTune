@@ -8,6 +8,7 @@ from typing import List
 
 from openbox.utils.util_funcs import get_types
 from autotune.optimizer.surrogate.core import build_surrogate
+from autotune.utils.history_container import HistoryContainer
 from openbox.utils.constants import VERY_SMALL_NUMBER
 from openbox.utils.config_space import ConfigurationSpace
 from openbox.utils.config_space.util import convert_configurations_to_array
@@ -51,7 +52,7 @@ class BaseTLSurrogate(object):
         self.logger = get_logger(self.__class__.__name__)
 
     @abc.abstractmethod
-    def train(self, X: np.ndarray, y: np.ndarray):
+    def train(self, target_hpo_data: HistoryContainer):
         pass
 
     @abc.abstractmethod
@@ -66,16 +67,13 @@ class BaseTLSurrogate(object):
         self.logger.info('Start to train base surrogates.')
         start_time = time.time()
         self.source_surrogates = list()
-        for hpo_evaluation_data in self.source_hpo_data:
+        for history_container in self.source_hpo_data:
             print('.', end='')
             model = build_surrogate(self.surrogate_type, self.config_space,
                                     np.random.RandomState(self.random_seed))
-            _X, _y = list(), list()
-            for _config, _config_perf in hpo_evaluation_data.items():
-                _X.append(_config)
-                _y.append(_config_perf)
-            X = convert_configurations_to_array(_X)
-            y = np.array(_y, dtype=np.float64)
+            X = convert_configurations_to_array(history_container.configurations)
+            y = history_container.get_transformed_perfs()
+
             if self.num_src_hpo_trial != -1:
                 X = X[:self.num_src_hpo_trial]
                 y = y[:self.num_src_hpo_trial]
