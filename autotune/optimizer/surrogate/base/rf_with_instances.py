@@ -7,8 +7,8 @@ import typing
 import numpy as np
 from pyrfr import regression
 
-from openbox.surrogate.base.base_model import  AbstractModel
-from openbox.utils.constants import N_TREES
+from autotune.optimizer.surrogate.base.base_model import  AbstractModel
+from autotune.utils.constants import N_TREES
 
 
 class RandomForestWithInstances(AbstractModel):

@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Optional, Tuple, Union
 
 from ConfigSpace import ConfigurationSpace
-from openbox.surrogate.base.base_model import AbstractModel
+from autotune.optimizer.surrogate.base.base_model import AbstractModel
 
 logger = logging.getLogger(__name__)
 

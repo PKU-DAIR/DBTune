@@ -9,16 +9,14 @@ import time
 import scipy.stats as sps
 import statsmodels.api as sm
 import math
-import pickle
 
 from autotune.optimizer.surrogate.ddpg.ddpg import DDPG
-from openbox.utils.util_funcs import check_random_state
+from autotune.utils.util_funcs import check_random_state
 from autotune.utils.history_container import HistoryContainer
 from autotune.utils.history_container import Observation
-from openbox.utils.config_space.util import convert_configurations_to_array
-from openbox.utils.samplers import SobolSampler, LatinHypercubeSampler
-from openbox.utils.config_space import ConfigurationSpace, Configuration, UniformIntegerHyperparameter, \
-    CategoricalHyperparameter, UniformFloatHyperparameter
+from autotune.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.config_space import ConfigurationSpace, Configuration, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
+from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
 
 
 def create_output_folders():
@@ -27,9 +25,7 @@ def create_output_folders():
         if not os.path.exists(folder):
             os.mkdir(folder)
 
-
 class DDPG_Optimizer():
-    # TODO：Add warm start
     def __init__(self, config_space,
                  knobs_num,
                  metrics_num,
@@ -154,6 +150,7 @@ class DDPG_Optimizer():
 
             return
 
+        self.history_container.update_observation(observation)
         self.last_external_metrics = observation.objs[0]
         reward = self.get_reward(self.last_external_metrics)
         next_state = observation.IM

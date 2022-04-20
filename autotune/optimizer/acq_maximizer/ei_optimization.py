@@ -14,13 +14,13 @@ import random
 import scipy
 import numpy as np
 
-from openbox.acquisition_function.acquisition import AbstractAcquisitionFunction
-from openbox.utils.config_space import get_one_exchange_neighbourhood, \
+from autotune.optimizer.acquisition_function.acquisition import AbstractAcquisitionFunction
+from autotune.utils.config_space import get_one_exchange_neighbourhood, \
     Configuration, ConfigurationSpace
-from openbox.acq_maximizer.random_configuration_chooser import ChooserNoCoolDown, ChooserProb
-from openbox.utils.history_container import HistoryContainer, MultiStartHistoryContainer
-from openbox.utils.util_funcs import get_types
-from openbox.utils.constants import MAXINT
+from autotune.optimizer.acq_maximizer.random_configuration_chooser import ChooserNoCoolDown, ChooserProb
+from autotune.utils.history_container import HistoryContainer, MultiStartHistoryContainer
+from autotune.utils.util_funcs import get_types
+from autotune.utils.constants import MAXINT
 
 
 class AcquisitionFunctionMaximizer(object, metaclass=abc.ABCMeta):
@@ -31,9 +31,9 @@ class AcquisitionFunctionMaximizer(object, metaclass=abc.ABCMeta):
 
     Parameters
     ----------
-    acquisition_function : ~openbox.acquisition_function.acquisition.AbstractAcquisitionFunction
+    acquisition_function : ~autotune.optimizer.acquisition_function.acquisition.AbstractAcquisitionFunction
 
-    config_space : ~openbox.config_space.ConfigurationSpace
+    config_space : ~autotune.config_space.ConfigurationSpace
 
     rng : np.random.RandomState or int, optional
     """
@@ -66,9 +66,9 @@ class AcquisitionFunctionMaximizer(object, metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
-        stats: ~openbox.stats.stats.Stats
+        stats: ~autotune.stats.stats.Stats
             current stats object
         num_points: int
             number of points to be sampled
@@ -77,7 +77,7 @@ class AcquisitionFunctionMaximizer(object, metaclass=abc.ABCMeta):
         Returns
         -------
         iterable
-            An iterable consisting of :class:`openbox.config_space.Configuration`.
+            An iterable consisting of :class:`autotune.config_space.Configuration`.
         """
         return [t[1] for t in self._maximize(runhistory, num_points, **kwargs)]
 
@@ -96,9 +96,9 @@ class AcquisitionFunctionMaximizer(object, metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
-        stats: ~openbox.stats.stats.Stats
+        stats: ~autotune.stats.stats.Stats
             current stats object
         num_points: int
             number of points to be sampled
@@ -108,7 +108,7 @@ class AcquisitionFunctionMaximizer(object, metaclass=abc.ABCMeta):
         -------
         iterable
             An iterable consistng of
-            tuple(acqusition_value, :class:`openbox.config_space.Configuration`).
+            tuple(acqusition_value, :class:`autotune.config_space.Configuration`).
         """
         raise NotImplementedError()
 
@@ -215,9 +215,9 @@ class LocalSearch(AcquisitionFunctionMaximizer):
 
     Parameters
     ----------
-    acquisition_function : ~openbox.acquisition_function.acquisition.AbstractAcquisitionFunction
+    acquisition_function : ~autotune.optimizer.acquisition_function.acquisition.AbstractAcquisitionFunction
 
-    config_space : ~openbox.config_space.ConfigurationSpace
+    config_space : ~autotune.config_space.ConfigurationSpace
 
     rng : np.random.RandomState or int, optional
 
@@ -253,9 +253,9 @@ class LocalSearch(AcquisitionFunctionMaximizer):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
-        stats: ~openbox.stats.stats.Stats
+        stats: ~autotune.stats.stats.Stats
             current stats object
         num_points: int
             number of points to be sampled
@@ -376,9 +376,9 @@ class RandomSearch(AcquisitionFunctionMaximizer):
 
     Parameters
     ----------
-    acquisition_function : ~openbox.acquisition_function.acquisition.AbstractAcquisitionFunction
+    acquisition_function : ~autotune.optimizer.acquisition_function.acquisition.AbstractAcquisitionFunction
 
-    config_space : ~openbox.config_space.ConfigurationSpace
+    config_space : ~autotune.config_space.ConfigurationSpace
 
     rng : np.random.RandomState or int, optional
     """
@@ -394,7 +394,7 @@ class RandomSearch(AcquisitionFunctionMaximizer):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
         num_points: int
             number of points to be sampled
@@ -407,7 +407,7 @@ class RandomSearch(AcquisitionFunctionMaximizer):
         -------
         iterable
             An iterable consistng of
-            tuple(acqusition_value, :class:`openbox.config_space.Configuration`).
+            tuple(acqusition_value, :class:`autotune.config_space.Configuration`).
         """
 
         if num_points > 1:
@@ -435,9 +435,9 @@ class InterleavedLocalAndRandomSearch(AcquisitionFunctionMaximizer):
 
     Parameters
     ----------
-    acquisition_function : ~openbox.acquisition_function.acquisition.AbstractAcquisitionFunction
+    acquisition_function : ~autotune.optimizer.acquisition_function.acquisition.AbstractAcquisitionFunction
 
-    config_space : ~openbox.config_space.ConfigurationSpace
+    config_space : ~autotune.config_space.ConfigurationSpace
 
     rng : np.random.RandomState or int, optional
 
@@ -497,11 +497,11 @@ class InterleavedLocalAndRandomSearch(AcquisitionFunctionMaximizer):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
         num_points: int
             number of points to be sampled
-        random_configuration_chooser: ~openbox.acq_maximizer.random_configuration_chooser.RandomConfigurationChooser
+        random_configuration_chooser: ~autotune.optimizer.acq_maximizer.random_configuration_chooser.RandomConfigurationChooser
             part of the returned ChallengerList such
             that we can interleave random configurations
             by a scheme defined by the random_configuration_chooser;
@@ -513,7 +513,7 @@ class InterleavedLocalAndRandomSearch(AcquisitionFunctionMaximizer):
         Returns
         -------
         Iterable[Configuration]
-            to be concrete: ~openbox.ei_optimization.ChallengerList
+            to be concrete: ~autotune.ei_optimization.ChallengerList
         """
 
         next_configs_by_local_search = self.local_search._maximize(
@@ -529,7 +529,7 @@ class InterleavedLocalAndRandomSearch(AcquisitionFunctionMaximizer):
 
         # Having the configurations from random search, sorted by their
         # acquisition function value is important for the first few iterations
-        # of openbox. As long as the random forest predicts constant value, we
+        # of autotune. As long as the random forest predicts constant value, we
         # want to use only random configurations. Having them at the begging of
         # the list ensures this (even after adding the configurations by local
         # search, and then sorting them)
@@ -565,9 +565,9 @@ class ScipyOptimizer(AcquisitionFunctionMaximizer):
 
     Parameters
     ----------
-    acquisition_function : ~openbox.acquisition_function.acquisition.AbstractAcquisitionFunction
+    acquisition_function : ~autotune.optimizer.acquisition_function.acquisition.AbstractAcquisitionFunction
 
-    config_space : ~openbox.config_space.ConfigurationSpace
+    config_space : ~autotune.config_space.ConfigurationSpace
 
     rng : np.random.RandomState or int, optional
     """
@@ -646,9 +646,9 @@ class RandomScipyOptimizer(AcquisitionFunctionMaximizer):
 
     Parameters
     ----------
-    acquisition_function : ~openbox.acquisition_function.acquisition.AbstractAcquisitionFunction
+    acquisition_function : ~autotune.optimizer.acquisition_function.acquisition.AbstractAcquisitionFunction
 
-    config_space : ~openbox.config_space.ConfigurationSpace
+    config_space : ~autotune.config_space.ConfigurationSpace
 
     rng : np.random.RandomState or int, optional
     """
@@ -730,9 +730,9 @@ class ScipyGlobalOptimizer(AcquisitionFunctionMaximizer):
 
     Parameters
     ----------
-    acquisition_function : ~openbox.acquisition_function.acquisition.AbstractAcquisitionFunction
+    acquisition_function : ~autotune.optimizer.acquisition_function.acquisition.AbstractAcquisitionFunction
 
-    config_space : ~openbox.config_space.ConfigurationSpace
+    config_space : ~autotune.config_space.ConfigurationSpace
 
     rng : np.random.RandomState or int, optional
     """
@@ -798,9 +798,9 @@ class StagedBatchScipyOptimizer(AcquisitionFunctionMaximizer):
 
     Parameters
     ----------
-    acquisition_function : ~openbox.acquisition_function.acquisition.AbstractAcquisitionFunction
+    acquisition_function : ~autotune.optimizer.acquisition_function.acquisition.AbstractAcquisitionFunction
 
-    config_space : ~openbox.config_space.ConfigurationSpace
+    config_space : ~autotune.config_space.ConfigurationSpace
 
     num_random : Number of random chosen points
 
@@ -952,9 +952,9 @@ class MESMO_Optimizer(AcquisitionFunctionMaximizer):
 
     Parameters
     ----------
-    acquisition_function : ~openbox.acquisition_function.acquisition.AbstractAcquisitionFunction
+    acquisition_function : ~autotune.optimizer.acquisition_function.acquisition.AbstractAcquisitionFunction
 
-    config_space : ~openbox.config_space.ConfigurationSpace
+    config_space : ~autotune.config_space.ConfigurationSpace
 
     rng : np.random.RandomState or int, optional
 
@@ -985,7 +985,7 @@ class MESMO_Optimizer(AcquisitionFunctionMaximizer):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
         num_points: int
             number of points to be sampled
@@ -995,7 +995,7 @@ class MESMO_Optimizer(AcquisitionFunctionMaximizer):
         Returns
         -------
         Iterable[Configuration]
-            to be concrete: ~openbox.ei_optimization.ChallengerList
+            to be concrete: ~autotune.ei_optimization.ChallengerList
         """
 
         def inverse_acquisition(x):
@@ -1057,9 +1057,9 @@ class USeMO_Optimizer(AcquisitionFunctionMaximizer):
 
     Parameters
     ----------
-    acquisition_function : ~openbox.acquisition_function.acquisition.AbstractAcquisitionFunction
+    acquisition_function : ~autotune.optimizer.acquisition_function.acquisition.AbstractAcquisitionFunction
 
-    config_space : ~openbox.config_space.ConfigurationSpace
+    config_space : ~autotune.config_space.ConfigurationSpace
 
     rng : np.random.RandomState or int, optional
 
@@ -1085,7 +1085,7 @@ class USeMO_Optimizer(AcquisitionFunctionMaximizer):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
         num_points: int
             number of points to be sampled
@@ -1095,7 +1095,7 @@ class USeMO_Optimizer(AcquisitionFunctionMaximizer):
         Returns
         -------
         Iterable[Configuration]
-            to be concrete: ~openbox.ei_optimization.ChallengerList
+            to be concrete: ~autotune.ei_optimization.ChallengerList
         """
 
         acq_vals = np.asarray(self.acquisition_function.uncertainties)
@@ -1162,7 +1162,7 @@ class batchMCOptimizer(AcquisitionFunctionMaximizer):
 
         Parameters
         ----------
-        runhistory: ~openbox.utils.history_container.HistoryContainer
+        runhistory: ~autotune.utils.history_container.HistoryContainer
             runhistory object
         num_points: int
             number of points to be sampled
@@ -1176,9 +1176,9 @@ class batchMCOptimizer(AcquisitionFunctionMaximizer):
         -------
         iterable
             An iterable consistng of
-            tuple(acqusition_value, :class:`openbox.config_space.Configuration`).
+            tuple(acqusition_value, :class:`autotune.config_space.Configuration`).
         """
-        from openbox.utils.samplers import SobolSampler
+        from autotune.utils.samplers import SobolSampler
 
         cur_idx = 0
         config_acq = list()

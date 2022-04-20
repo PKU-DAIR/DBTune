@@ -10,23 +10,22 @@ import math
 from typing import List
 from collections import OrderedDict
 from tqdm import tqdm
-from openbox.utils.util_funcs import check_random_state
-from openbox.utils.logging_utils import get_logger
-from autotune.utils.history_container import HistoryContainer, MOHistoryContainer, MultiStartHistoryContainer
-from openbox.utils.constants import MAXINT, SUCCESS
-from openbox.utils.samplers import SobolSampler, LatinHypercubeSampler
-from openbox.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
-from openbox.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.util_funcs import check_random_state
+from autotune.utils.logging_utils import get_logger
+from autotune.utils.history_container import HistoryContainer, MOHistoryContainer
+from autotune.utils.constants import MAXINT, SUCCESS
+from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
+from autotune.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
+from autotune.utils.config_space.util import convert_configurations_to_array
 from autotune.utils.history_container import Observation
 from autotune.pipleline.base import BOBase
-from openbox.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
-from openbox.utils.limit import time_limit, TimeoutException
-from openbox.utils.util_funcs import get_result
+from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
+from autotune.utils.limit import time_limit, TimeoutException
+from autotune.utils.util_funcs import get_result
 from autotune.selector.selector import SHAPSelector, fANOVASelector, GiniSelector, AblationSelector, LASSOSelector
 from autotune.optimizer.surrogate.core import build_surrogate, surrogate_switch
 from autotune.optimizer.core import build_acq_func, build_optimizer
 import pdb
-
 
 class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
@@ -77,7 +76,10 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         self.config_space_all = config_space
 
         # init history container
-        self.history_container = HistoryContainer(task_id, self.num_constraints, config_space=self.config_space)
+        if self.num_objs == 1:
+            self.history_container = HistoryContainer(task_id, self.num_constraints, config_space=self.config_space)
+        else:  # multi-objectives
+            self.history_container = MOHistoryContainer(task_id, self.num_objs, self.num_constraints, self.config_space, ref_point)
 
         # initial design
         if initial_configurations is not None and len(initial_configurations) > 0:
@@ -136,17 +138,17 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
             if self.num_objs == 1:  # single objective
                 if self.num_constraints == 0:
                     self.acq_type = 'ei'
-                else:  # with constraints
+                else:   # with constraints
                     self.acq_type = 'eic'
-            elif self.num_objs <= 4:  # multi objective (<=4)
+            elif self.num_objs <= 4:    # multi objective (<=4)
                 if self.num_constraints == 0:
                     self.acq_type = 'ehvi'
-                else:  # with constraints
+                else:   # with constraints
                     self.acq_type = 'ehvic'
-            else:  # multi objective (>4)
+            else:   # multi objective (>4)
                 if self.num_constraints == 0:
                     self.acq_type = 'mesmo'
-                else:  # with constraints
+                else:   # with constraints
                     self.acq_type = 'mesmoc'
                 self.surrogate_type = 'gp_rbf'
                 info_str = ' surrogate_type: %s.' % self.surrogate_type
@@ -229,16 +231,27 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
     def setup_bo_basics(self):
         """
-        Prepare the basic BO components.
-        Returns
-        -------
-        An optimizer object.
-        """
+                Prepare the basic BO components.
+                Returns
+                -------
+                An optimizer object.
+                """
+        if self.num_objs == 1 or self.acq_type == 'parego':
+            self.surrogate_model = build_surrogate(func_str=self.surrogate_type,
+                                                   config_space=self.config_space,
+                                                   rng=self.rng,
+                                                   history_hpo_data=self.history_bo_data)
+        else:  # multi-objectives
+            self.surrogate_model = [build_surrogate(func_str=self.surrogate_type,
+                                                    config_space=self.config_space,
+                                                    rng=self.rng,
+                                                    history_hpo_data=self.history_bo_data)
+                                    for _ in range(self.num_objs)]
 
-        self.surrogate_model = build_surrogate(func_str=self.surrogate_type,
-                                               config_space=self.config_space,
-                                               rng=self.rng,
-                                               history_hpo_data=self.history_bo_data)
+        if self.num_constraints > 0:
+            self.constraint_models = [build_surrogate(func_str=self.constraint_surrogate_type,
+                                                      config_space=self.config_space,
+                                                      rng=self.rng) for _ in range(self.num_constraints)]
 
         if self.acq_type in ['mesmo', 'mesmoc', 'mesmoc2', 'usemo']:
             self.acquisition_function = build_acq_func(func_str=self.acq_type,
@@ -313,20 +326,36 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
         return initial_configs
 
+
     def get_surrogate(self, history_container=None):
 
         if history_container is None:
             history_container = self.history_container
 
-        if self.optimization_strategy == 'bo':
+        X = convert_configurations_to_array(history_container.configurations)
+        Y = history_container.get_transformed_perfs()
+        cY = history_container.get_transformed_constraint_perfs()
+
+        if self.num_objs == 1:
             # TODO: different train interface
             if self.surrogate_type.startswith('tlbo_'):
                 self.surrogate_model.train(history_container)
             else:
-                X = convert_configurations_to_array(history_container.configurations)
-                Y = history_container.get_transformed_perfs()
-                cY = history_container.get_transformed_constraint_perfs()
                 self.surrogate_model.train(X, Y)
+        elif self.acq_type == 'parego':
+            weights = self.rng.random_sample(self.num_objs)
+            weights = weights / np.sum(weights)
+            scalarized_obj = get_chebyshev_scalarization(weights, Y)
+            self.surrogate_model.train(X, scalarized_obj(Y))
+        else:  # multi-objectives
+            for i in range(self.num_objs):
+                self.surrogate_model[i].train(X, Y[:, i])
+
+            # train constraint model
+        for i in range(self.num_constraints):
+            self.constraint_models[i].train(X, cY[:, i])
+
+        return X, Y
 
 
     def get_suggestion(self, history_container=None, return_list=False):
@@ -340,7 +369,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         # if have enough data, get_suggorate
         num_config_evaluated = len(self.history_container.configurations)
         if num_config_evaluated >= self.init_num:
-            self.get_surrogate()
+            X, Y = self.get_surrogate()
 
         if history_container is None:
             history_container = self.history_container
@@ -368,6 +397,28 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                                                  constraint_models=self.constraint_models,
                                                  eta=incumbent_value,
                                                  num_data=num_config_evaluated)
+            else:  # multi-objectives
+                mo_incumbent_value = history_container.get_mo_incumbent_value()
+                if self.acq_type == 'parego':
+                    self.acquisition_function.update(model=self.surrogate_model,
+                                                     constraint_models=self.constraint_models,
+                                                     eta=scalarized_obj(np.atleast_2d(mo_incumbent_value)),
+                                                     num_data=num_config_evaluated)
+                elif self.acq_type.startswith('ehvi'):
+                    partitioning = NondominatedPartitioning(self.num_objs, Y)
+                    cell_bounds = partitioning.get_hypercell_bounds(ref_point=self.ref_point)
+                    self.acquisition_function.update(model=self.surrogate_model,
+                                                     constraint_models=self.constraint_models,
+                                                     cell_lower_bounds=cell_bounds[0],
+                                                     cell_upper_bounds=cell_bounds[1])
+                else:
+                    self.acquisition_function.update(model=self.surrogate_model,
+                                                     constraint_models=self.constraint_models,
+                                                     constraint_perfs=cY,  # for MESMOC
+                                                     eta=mo_incumbent_value,
+                                                     num_data=num_config_evaluated,
+                                                     X=X, Y=Y)
+
 
             # optimize acquisition function
             challengers = self.optimizer.maximize(runhistory=history_container,
@@ -380,7 +431,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                 if config not in history_container.configurations:
                     return config
             self.logger.warning('Cannot get non duplicate configuration from BO candidates (len=%d). '
-                                'Sample random config.' % (len(challengers.challengers),))
+                                'Sample random config.' % (len(challengers.challengers), ))
             return self.sample_random_configs(1, history_container)[0]
         else:
             raise ValueError('Unknown optimization strategy: %s.' % self.optimization_strategy)

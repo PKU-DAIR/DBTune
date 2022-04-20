@@ -6,14 +6,14 @@ import typing
 import numpy as np
 from typing import List
 
-from openbox.utils.util_funcs import get_types
+from autotune.utils.util_funcs import get_types
 from autotune.optimizer.surrogate.core import build_surrogate
 from autotune.utils.history_container import HistoryContainer
-from openbox.utils.constants import VERY_SMALL_NUMBER
-from openbox.utils.config_space import ConfigurationSpace
-from openbox.utils.config_space.util import convert_configurations_to_array
-from openbox.utils.normalization import zero_mean_unit_var_normalization, zero_one_normalization
-from openbox.utils.logging_utils import get_logger
+from autotune.utils.constants import VERY_SMALL_NUMBER
+from autotune.utils.config_space import ConfigurationSpace
+from autotune.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.normalization import zero_mean_unit_var_normalization, zero_one_normalization
+from autotune.utils.logging_utils import get_logger
 
 
 class BaseTLSurrogate(object):

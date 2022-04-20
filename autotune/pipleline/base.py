@@ -6,8 +6,8 @@ import time
 import numpy as np
 from typing import List
 from collections import OrderedDict
-from openbox.utils.util_funcs import check_random_state
-from openbox.utils.logging_utils import setup_logger, get_logger
+from autotune.utils.util_funcs import check_random_state
+from autotune.utils.logging_utils import setup_logger, get_logger
 
 
 class BOBase(object, metaclass=abc.ABCMeta):

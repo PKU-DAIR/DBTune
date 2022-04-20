@@ -1,9 +1,9 @@
 # License: MIT
 
 import numpy as np
-from openbox.surrogate.tlbo.base import BaseTLSurrogate
-from openbox.core.base import build_surrogate
-from openbox.utils.config_space.util import convert_configurations_to_array
+from autotune.optimizer.surrogate.tlbo.base import BaseTLSurrogate
+from autotune.core.base import build_surrogate
+from autotune.utils.config_space.util import convert_configurations_to_array
 
 
 class SGPR(BaseTLSurrogate):

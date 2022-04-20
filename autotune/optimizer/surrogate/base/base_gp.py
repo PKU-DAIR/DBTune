@@ -7,8 +7,8 @@ from ConfigSpace import ConfigurationSpace
 import numpy as np
 import sklearn.gaussian_process.kernels
 
-from openbox.surrogate.base.base_model import AbstractModel
-import openbox.surrogate.base.gp_base_prior
+from autotune.optimizer.surrogate.base.base_model import AbstractModel
+import autotune.optimizer.surrogate.base.gp_base_prior
 
 from skopt.learning.gaussian_process.kernels import Kernel
 from skopt.learning.gaussian_process import GaussianProcessRegressor
@@ -93,7 +93,7 @@ class BaseGP(AbstractModel):
             self,
             add_bound_priors: bool = True,
             add_soft_bounds: bool = False,
-    ) -> List[List[openbox.surrogate.base.gp_base_prior.Prior]]:
+    ) -> List[List[autotune.optimizer.surrogate.base.gp_base_prior.Prior]]:
         # Obtain a list of all priors for each tunable hyperparameter of the kernel
         all_priors = []
         to_visit = []
@@ -120,12 +120,12 @@ class BaseGP(AbstractModel):
                     if add_bound_priors:
                         if add_soft_bounds:
                             priors_for_hp.append(
-                                openbox.surrogate.base.gp_base_prior.SoftTopHatPrior(
+                                autotune.optimizer.surrogate.base.gp_base_prior.SoftTopHatPrior(
                                     lower_bound=bounds[i][0], upper_bound=bounds[i][1], rng=self.rng, exponent=2,
                                 ))
                         else:
                             priors_for_hp.append(
-                                openbox.surrogate.base.gp_base_prior.TophatPrior(
+                                autotune.optimizer.surrogate.base.gp_base_prior.TophatPrior(
                                     lower_bound=bounds[i][0], upper_bound=bounds[i][1], rng=self.rng,
                                 ))
                     all_priors.append(priors_for_hp)

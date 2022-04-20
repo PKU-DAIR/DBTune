@@ -2,8 +2,8 @@
 
 import numpy as np
 from sklearn.model_selection import KFold
-from openbox.surrogate.tlbo.base import BaseTLSurrogate
-from openbox.surrogate.tlbo.scipy_solver import scipy_solve
+from autotune.optimizer.surrogate.tlbo.base import BaseTLSurrogate
+from autotune.optimizer.surrogate.tlbo.scipy_solver import scipy_solve
 
 _scale_method = 'standardize'
 

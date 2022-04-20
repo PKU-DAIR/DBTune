@@ -5,9 +5,9 @@ from lightgbm import LGBMRegressor
 from sklearn import preprocessing
 from sklearn.linear_model import lasso_path
 from sklearn.ensemble import RandomForestRegressor
-from openbox.utils.fanova import fANOVA
-from openbox.utils.config_space import ConfigurationSpace
-from openbox.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.fanova import fANOVA
+from autotune.utils.config_space import ConfigurationSpace
+from autotune.utils.config_space.util import convert_configurations_to_array
 from ConfigSpace import CategoricalHyperparameter, OrdinalHyperparameter, Constant
 import pdb
 

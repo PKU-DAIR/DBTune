@@ -495,7 +495,7 @@ class BenchEnv(DBEnv):
             return float(metrics[1])
 
 
-    def step_openbox(self, config):
+    def step(self, config):
         f = open(self.lhs_log, 'a')
         knobs = config.get_dictionary().copy()
         for k in knobs.keys():

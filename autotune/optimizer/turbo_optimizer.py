@@ -17,11 +17,11 @@ from torch.quasirandom import SobolEngine
 from autotune.optimizer.surrogate.base.gp_for_turbo import train_gp
 import pdb
 
-from openbox.utils.util_funcs import check_random_state
+from autotune.utils.util_funcs import check_random_state
 from autotune.utils.history_container import HistoryContainer
-from openbox.core.base import Observation
-from openbox.utils.config_space.util import convert_configurations_to_array
-from openbox.utils.config_space import ConfigurationSpace, Configuration, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
+from autotune.core.base import Observation
+from autotune.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.config_space import ConfigurationSpace, Configuration, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
 
 import numpy as np
 

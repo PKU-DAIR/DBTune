@@ -16,8 +16,8 @@ except ModuleNotFoundError:
     from sklearn.ensemble._base import _partition_estimators
     old_sk_version = False
 
-from openbox.surrogate.base.base_model import AbstractModel
-from openbox.utils.constants import N_TREES
+from autotune.optimizer.surrogate.base.base_model import AbstractModel
+from autotune.utils.constants import N_TREES
 
 
 def _collect_prediction(predict, X, out, lock):

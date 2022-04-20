@@ -1,6 +1,6 @@
 import os
 import sys
-from openbox.utils.config_space import ConfigurationSpace, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
+from autotune.utils.config_space import ConfigurationSpace, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
 from autotune.workload_map import WorkloadMapping
 from autotune.pipleline.pipleline import PipleLine
 from .knobs import ts, logger
@@ -21,6 +21,8 @@ class DBTuner:
         self.model_params_path = ''
         self.surrogate_type = None
         self.config_space = ConfigurationSpace()
+        self.objs = eval(args_tune['performance_metric'])
+        self.constraints = eval(args_tune['constraints'])
 
         self.setup_configuration_space()
         self.setup_transfer()
@@ -94,11 +96,11 @@ class DBTuner:
 
 
     def tune(self):
-        bo = PipleLine(self.env.step_openbox,
+        bo = PipleLine(self.env.step,
                        self.config_space,
+                       num_objs=len(self.objs),
+                       num_constraints=len(self.constraints),
                        optimizer_type=self.method,
-                       num_objs=1,
-                       num_constraints=0,
                        max_runs=210,
                        surrogate_type=self.surrogate_type,
                        history_bo_data=self.hcL,
@@ -109,6 +111,7 @@ class DBTuner:
                        incremental_step=eval(self.args_tune['incremental_step']),
                        incremental_num=eval(self.args_tune['incremental_num']),
                        init_strategy='random_explore_first',
+                       ref_point= self.env.reference_point,
                        task_id=self.args_tune['task_id'],
                        time_limit_per_trial=60 * 200,
                        num_hps=int(self.args_tune['initial_tunable_knob_num']),

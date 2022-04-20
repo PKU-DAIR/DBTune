@@ -14,10 +14,10 @@ import numpy as np
 from scipy.stats import norm
 import math
 
-from openbox.utils.config_space import Configuration
-from openbox.utils.config_space.util import convert_configurations_to_array
-from openbox.surrogate.base.base_model import AbstractModel
-from openbox.surrogate.base.gp import GaussianProcess
+from autotune.utils.config_space import Configuration
+from autotune.utils.config_space.util import convert_configurations_to_array
+from autotune.optimizer.surrogate.base.base_model import AbstractModel
+from autotune.optimizer.surrogate.base.gp import GaussianProcess
 
 
 class AbstractAcquisitionFunction(object, metaclass=abc.ABCMeta):

@@ -10,9 +10,9 @@ import emcee
 import numpy as np
 
 from ConfigSpace import ConfigurationSpace
-from openbox.surrogate.base.base_gp import BaseGP
-from openbox.surrogate.base.gp import GaussianProcess
-from openbox.surrogate.base.gp_base_prior import Prior
+from autotune.optimizer.surrogate.base.base_gp import BaseGP
+from autotune.optimizer.surrogate.base.gp import GaussianProcess
+from autotune.optimizer.surrogate.base.gp_base_prior import Prior
 
 from skopt.learning.gaussian_process.kernels import Kernel
 from skopt.learning.gaussian_process import GaussianProcessRegressor

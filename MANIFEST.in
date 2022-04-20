@@ -12,3 +12,4 @@ include autotune/optimizer/acq_maximizer/*.py
 include autotune/transfer/*.py
 include autotune/transfer/tlbo/*.py
 include autotune/transfer/tlbo/*.py
+include autotune/utils/*

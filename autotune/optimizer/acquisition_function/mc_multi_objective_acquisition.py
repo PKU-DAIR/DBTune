@@ -5,9 +5,9 @@ from typing import List
 import numpy as np
 from scipy.stats import norm
 
-from openbox.acquisition_function.acquisition import AbstractAcquisitionFunction
-from openbox.surrogate.base.base_model import AbstractModel
-from openbox.surrogate.base.gp import GaussianProcess
+from autotune.optimizer.acquisition_function.acquisition import AbstractAcquisitionFunction
+from autotune.optimizer.surrogate.base.base_model import AbstractModel
+from autotune.optimizer.surrogate.base.gp import GaussianProcess
 
 
 class MCParEGO(AbstractAcquisitionFunction):
@@ -19,7 +19,7 @@ class MCParEGO(AbstractAcquisitionFunction):
         self.mc_times = kwargs.get('mc_times', 10)
 
     def _compute(self, X: np.ndarray, **kwargs):
-        from openbox.utils.multi_objective import get_chebyshev_scalarization
+        from autotune.utils.multi_objective import get_chebyshev_scalarization
 
         Y_samples = np.zeros(shape=(self.mc_times, X.shape[0], len(self.model)))
         for idx in range(len(self.model)):

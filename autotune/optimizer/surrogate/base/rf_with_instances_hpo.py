@@ -16,8 +16,8 @@ from pyrfr import regression
 from sklearn.model_selection import KFold
 import scipy.stats.distributions as scst
 
-from openbox.surrogate.base.rf_with_instances import RandomForestWithInstances
-from openbox.utils.constants import N_TREES
+from autotune.optimizer.surrogate.base.rf_with_instances import RandomForestWithInstances
+from autotune.utils.constants import N_TREES
 
 
 MAX_NUM_NODES = 2 ** 20

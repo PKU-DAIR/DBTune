@@ -1,18 +1,18 @@
 # License: MIT
-
+import pdb
 import sys
 import time
 import json
 import collections
 from typing import List, Union
 import numpy as np
-from openbox.utils.constants import MAXINT, SUCCESS
-from openbox.utils.config_space import Configuration, ConfigurationSpace
-from openbox.utils.logging_utils import get_logger
-from openbox.utils.multi_objective import Hypervolume, get_pareto_front
-from openbox.utils.config_space.space_utils import get_config_from_dict
-from openbox.utils.visualization.plot_convergence import plot_convergence
-from autotune.utils.transform import get_transform_function
+from autotune.utils.constants import MAXINT, SUCCESS
+from autotune.utils.config_space import Configuration, ConfigurationSpace
+from autotune.utils.logging_utils import get_logger
+from autotune.utils.multi_objective import Hypervolume, get_pareto_front
+from autotune.utils.config_space.space_utils import get_config_from_dict
+from autotune.utils.visualization.plot_convergence import plot_convergence
+from autotune.utils.transform import  get_transform_function
 
 Perf = collections.namedtuple(
     'perf', ['cost', 'time', 'status', 'additional_info'])
@@ -338,7 +338,7 @@ class HistoryContainer(object):
                 'https://open-box.readthedocs.io/en/latest/installation/install_pyrfr.html'
             )
             raise
-        from openbox.utils.fanova import fANOVA
+        from autotune.utils.fanova import fANOVA
         from terminaltables import AsciiTable
 
         if config_space is None:
@@ -436,7 +436,7 @@ class HistoryContainer(object):
         info = all_data["info"]
         data = all_data["data"]
 
-        y_variable = info['objs']
+        y_variable = info['objs'][0]
         c_variables = info['constraints']
         self.num_constraints = len(c_variables)
         self.info = info
@@ -546,8 +546,8 @@ class MOHistoryContainer(HistoryContainer):
     Multi-Objective History Container
     """
 
-    def __init__(self, task_id, num_objs, num_constraints=0, ref_point=None):
-        super().__init__(task_id=task_id, num_constraints=num_constraints)
+    def __init__(self, task_id, num_objs, num_constraints=0, config_space=None, ref_point=None):
+        super().__init__(task_id=task_id, num_constraints=num_constraints, config_space=config_space)
         self.pareto = collections.OrderedDict()
         self.num_objs = num_objs
         self.mo_incumbent_value = [MAXINT] * self.num_objs
@@ -638,7 +638,6 @@ class MOHistoryContainer(HistoryContainer):
 
     def visualize_jupyter(self, *args, **kwargs):
         raise NotImplementedError('visualize_jupyter only supports single objective!')
-
 
 
 
@@ -781,5 +780,4 @@ class MultiStartHistoryContainer(object):
             instance of configuration space
         """
         self.current.load_history_from_json(cs, fn)
-
 

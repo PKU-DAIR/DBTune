@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 import scipy.stats as sps
 
-from openbox.utils.constants import VERY_SMALL_NUMBER
+from autotune.utils.constants import VERY_SMALL_NUMBER
 
 
 class Prior(object):
