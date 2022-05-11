@@ -1,6 +1,6 @@
-from autotune.utils.config import parse_args, parse_knob_config
-import pdb
-from autotune.database import MysqlDB, PostgresqlDB
+from autotune.utils.config import parse_args
+from autotune.database.mysqldb import MysqlDB
+from autotune.database.postgresqldb import PostgresqlDB
 from autotune.dbenv import DBEnv
 from autotune.tuner import DBTuner
 

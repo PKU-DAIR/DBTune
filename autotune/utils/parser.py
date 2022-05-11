@@ -17,8 +17,6 @@ num_samples_normal = 0
 class ConfigParser(object):
 
     def __init__(self, cnf):
-        if not os.path.exists(cnf):
-            return
         f = open(cnf)
         self._cnf = cnf
         self._knobs = {}
@@ -36,7 +34,7 @@ class ConfigParser(object):
                     continue
         f.close()
 
-    def replace(self, tmp='/tmp/mysql.cnf'):
+    def replace(self, tmp='/tmp/tmp.cnf'):
         record_list = []
         f1 = open(self._cnf)
         f2 = open(tmp, 'w')
@@ -62,26 +60,6 @@ class ConfigParser(object):
             self._knobs[k] = "'{}'".format(v)
         else:
             self._knobs[k] = v
-
-    def generate(self, output):
-        f1 = open(self._cnf)
-        f2 = open(output, 'w')
-        current_knobs = {}
-        for line in f1:
-            tpl = line.strip().split()
-            if len(tpl) < 1:
-                f2.write(line)
-            elif tpl[0] in self._knobs:
-                tpl[2] = self._knobs[tpl[0]]
-                f2.write('%s\t\t%s %s\n' % (tpl[0], tpl[1], tpl[2]))
-                current_knobs[tpl[0]] = 0
-            else:
-                f2.write(line)
-        for k, v in self._knobs.items():
-            if k not in current_knobs:
-                f2.write('%s\t\t= %s\n' % (k, v))
-        f1.close()
-        f2.close()
 
 
 def parse_tpcc(file_path):

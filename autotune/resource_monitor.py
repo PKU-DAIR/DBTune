@@ -32,6 +32,7 @@ class ResourceMonitor:
         self.processes.append(p2)
         p3 = mp.Process(target=self.monitor_io_usage, args=())
         self.processes.append(p3)
+        self.alive.value = True
         [proc.start() for proc in self.processes]
 
 
@@ -44,6 +45,17 @@ class ResourceMonitor:
             'io_write': list(self.io_write_seq),
         }
 
+    def get_monitor_data_avg(self):
+        mem_virtual = list(self.mem_virtual_usage_seq)
+        mem_physical = list(self.mem_physical_usage_seq)
+        io_read = list(self.io_read_seq)
+        io_write = list(self.io_write_seq)
+
+        avg_read_io = sum(io_read) / (len(io_read) + 1e-9)
+        avg_write_io = sum(io_write) / (len(io_write) + 1e-9)
+        avg_virtual_memory = sum(mem_virtual) / (len(mem_virtual) + 1e-9)
+        avg_physical_memory = sum(mem_physical) / (len(mem_physical) + 1e-9)
+        return avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory
 
     def monitor_mem_usage(self):
         count = 0

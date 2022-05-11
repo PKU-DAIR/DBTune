@@ -7,6 +7,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from enum import Enum
 from multiprocessing import Manager
+from multiprocessing.connection import Client
 from collections import defaultdict
 from typing import Any
 from .knobs import gen_continuous
@@ -26,6 +27,7 @@ import multiprocessing as mp
 from .resource_monitor import ResourceMonitor
 from autotune.utils.config import knob_config
 from autotune.workload import SYSBENCH_WORKLOAD, JOB_WORKLOAD, OLTPBENCH_WORKLOADS
+from autotune.utils.parser import is_number
 
 RETRY_WAIT_TIME = 60
 
@@ -47,6 +49,10 @@ class DBEnv():
         self.knobs_detail = initialize_knobs(args['knob_config_file'], int(args['knob_num']))
         self.default_knobs = get_default_knobs()
         self.online_mode = eval(args['online_mode'])
+        self.remote_mode = eval(args['remote_mode'])
+        self.ssh_user = args['ssh_user']
+        self.ssh_passwd = args['ssh_passwd']
+        self.ssh_script_path = args['ssh_script_path']
         self.oltpbench_config_xml =args['oltpbench_config_xml']
         self.step_count = 0
         self.connect_sucess = True
@@ -60,7 +66,6 @@ class DBEnv():
         self.constraints =  eval(args_tune['constraints'])
         self.lhs_log = args['lhs_log']
         self.cpu_core = args['cpu_core']
-
 
     def generate_reference_point(self, user_defined_reference_point):
         if len(self.y_variable) <= 1:
@@ -96,7 +101,7 @@ class DBEnv():
         elif self.args['workload'].startswith('oltpbench_'):
             wl = dict(OLTPBENCH_WORKLOADS)
             dbname = self.args['workload']  # strip oltpbench_
-            logger.info('use database name {} by default'.format(dbname))
+            logger.info('use db name {} by default'.format(dbname))
         # elif self.args['workload'] == 'workload_zoo':
         #     wl = dict(WORKLOAD_ZOO_WORKLOADS)
         elif self.args['workload']== 'job':
@@ -111,17 +116,27 @@ class DBEnv():
         global RESTART_FREQUENCY
 
         if self.workload['name'] == 'sysbench' or self.workload['name'] == 'oltpbench':
-            BENCHMARK_RUNNING_TIME = 120
-            BENCHMARK_WARMING_TIME = 30
-            TIMEOUT = BENCHMARK_RUNNING_TIME + BENCHMARK_WARMING_TIME + 15
+            try:
+                BENCHMARK_RUNNING_TIME = int(self.args['workload_time'])
+            except:
+                BENCHMARK_RUNNING_TIME = 120
+            try:
+                BENCHMARK_WARMING_TIME = int(self.args['workload_warmup_time'])
+            except:
+                BENCHMARK_WARMING_TIME = 30
+            TIMEOUT = BENCHMARK_RUNNING_TIME + BENCHMARK_WARMING_TIME + 30
             RESTART_FREQUENCY = 200
         if self.workload['name'] == 'job':
-            BENCHMARK_RUNNING_TIME = 240
-            BENCHMARK_WARMING_TIME = 0
+            try:
+                BENCHMARK_RUNNING_TIME = int(self.args['workload_time'])
+            except:
+                BENCHMARK_RUNNING_TIME = 240
+            try:
+                BENCHMARK_WARMING_TIME = int(self.args['workload_warmup_time'])
+            except:
+                BENCHMARK_WARMING_TIME = 0
             TIMEOUT = BENCHMARK_RUNNING_TIME + BENCHMARK_WARMING_TIME
             RESTART_FREQUENCY = 30000
-
-
 
     def get_external_metrics(self, filename=''):
         """Get the external metrics including tps and rt"""
@@ -144,7 +159,6 @@ class DBEnv():
             # logger.error('unsupported workload {}'.format(self.workload['name']))
             result = parse_cloudbench(filename)
         return result
-
 
     def get_reward(self, external_metrics, y_variable):
         """Get the reward that is used in reinforcement learning algorithm.
@@ -192,7 +206,6 @@ class DBEnv():
     def get_reward3(self, external_metrics):
         return float(external_metrics[0] / self.default_external_metrics[0])
 
-
     def _get_best_now(self):
         with open(self.best_result) as f:
             lines = f.readlines()
@@ -227,14 +240,13 @@ class DBEnv():
             file.write(str(tps_best) + ',' + str(lat_best) + ',' + str(rate))
         return best_flag
 
-
     def get_benchmark_cmd(self):
         timestamp = int(time.time())
         filename = self.log_path + '/{}.log'.format(timestamp)
         dirname, _ = os.path.split(os.path.abspath(__file__))
         if self.workload['name'] == 'sysbench':
             cmd = self.workload['cmd'].format(dirname + '/cli/run_sysbench.sh',
-                                              self.db.workload['type'],
+                                              self.workload['type'],
                                               self.db.host,
                                               self.db.port,
                                               self.db.user,
@@ -273,24 +285,28 @@ class DBEnv():
         logger.info('[DBG]. {}'.format(cmd))
         return cmd, filename
 
-    def get_states(self, collect_cpu=0):
-        start = time.time()
-        self.connect_sucess = True
-        if not self.online_mode:
-            p = psutil.Process(self.db.pid)
-            if len(p.cpu_affinity())!= self.cpu_core:
-                command = 'sudo cgclassify -g memory,cpuset:sever ' + str(self.db.pid)
-                os.system(command)
-
+    def get_states(self, collect_resource=0):
+        # start Internal Metrics Collection
         internal_metrics = Manager().list()
         im = mp.Process(target=self.db.get_internal_metrics, args=(internal_metrics, BENCHMARK_RUNNING_TIME, BENCHMARK_WARMING_TIME))
         self.db.set_im_alive(True)
         im.start()
-        if collect_cpu:
-            rm = ResourceMonitor(self.db.pid, 1, BENCHMARK_WARMING_TIME, BENCHMARK_RUNNING_TIME)
-            rm.run()
+
+        # start Resource Monition (if activated)
+        if collect_resource:
+            if self.remote_mode:
+                # start remote Resource Monitor
+                clientDB_address = (self.db.host, 6001)
+                clientDB_conn = Client(clientDB_address, authkey=b'DBTuner')
+                clientDB_conn.send(self.db.pid)
+            else:
+                p = psutil.Process(self.db.pid)
+                p.cpu_percent()
+                rm = ResourceMonitor(self.db.pid, 1, BENCHMARK_WARMING_TIME, BENCHMARK_RUNNING_TIME)
+                rm.run()
+
+        # start Benchmark
         cmd, filename = self.get_benchmark_cmd()
-        # v = p.cpu_percent()
         print("[{}] benchmark start!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
         p_benchmark = subprocess.Popen(cmd, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, close_fds=True)
         try:
@@ -300,74 +316,79 @@ class DBEnv():
                 print("[{}] benchmark finished!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
         except subprocess.TimeoutExpired:
             print("[{}] benchmark timeout!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
-        # TODO: move to database.py
-        if not self.online_mode:
+
+        # terminate Benchmark
+        # TODO: move to db.py.bak
+        if not self.remote_mode:
             if self.db.args['db'] == 'mysql':
                 clear_cmd = """mysqladmin processlist -uroot -S$MYSQL_SOCK | awk '$2 ~ /^[0-9]/ {print "KILL "$2";"}' | mysql -uroot -S$MYSQL_SOCK """
             elif self.db.args['db'] == 'postgresql':
                 clear_cmd = """psql -c \"select pg_terminate_backend(pid) from pg_stat_activity where datname = 'imdbload';\" """
             subprocess.Popen(clear_cmd, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, close_fds=True)
             print("[{}] clear processlist".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
+
+        # stop Internal Metrics Collection
         self.db.set_im_alive(False)
         im.join()
-        if collect_cpu:
-            rm.terminate()
+
+        # stop Resource Monition (if activated)
+        if collect_resource:
+            if self.remote_mode:
+                # send Benchmark-Finish msg to remote Resource Monitor Process
+                clientDB_conn.send('benchmark_finished')
+                # receive remote Monitor Data
+                monitor_data = clientDB_conn.recv()
+                cpu, avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory = monitor_data
+                # close connection
+                clientDB_conn.close()
+
+            else:
+                cpu = p.cpu_percent()
+                rm.terminate()
+                avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory = rm.get_monitor_data_avg()
+        else:
+            cpu, avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory = 0, 0, 0, 0, 0
 
         if not self.connect_sucess:
             logger.info("connection failed")
             return None
-        #try:
+
         external_metrics = self.get_external_metrics(filename)
         internal_metrics, dirty_pages, hit_ratio, page_data = self.db._post_handle(internal_metrics)
         logger.info('internal metrics: {}.'.format(list(internal_metrics)))
-        ##except:
-        #    logger.info("connection failed")
-        #    return None
-        if collect_cpu:
-            monitor_data_dict = rm.get_monitor_data()
-            interval = time.time() - start
-            avg_read_io = sum(monitor_data_dict['io_read']) / (len(monitor_data_dict['io_read']) + 1e-9)
-            avg_write_io = sum(monitor_data_dict['io_write']) / (len(monitor_data_dict['io_write']) + 1e-9)
-            avg_virtual_memory = sum(monitor_data_dict['mem_virtual']) / (len(monitor_data_dict['mem_virtual']) + 1e-9)
-            avg_physical_memory = sum(monitor_data_dict['mem_physical']) / (
-                        len(monitor_data_dict['mem_physical']) + 1e-9)
-            resource = (None, avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory, dirty_pages, hit_ratio, page_data)
-            logger.info(external_metrics)
-            return external_metrics, internal_metrics, resource
-        else:
-            return external_metrics, internal_metrics, [0]*8
 
+        return external_metrics, internal_metrics, (
+        cpu, avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory, dirty_pages, hit_ratio, page_data)
 
-    def initialize(self, collect_CPU=0):
-        return np.random.rand(65), np.random.rand(6), np.random.rand(8)
+    def initialize(self, collect_resource=0):
+        # return np.random.rand(65), np.random.rand(6), np.random.rand(8)
         self.score = 0.
         self.steps = 0
         self.terminate = False
         logger.info('[DBG]. default tuning knobs: {}'.format(self.default_knobs))
         if self.online_mode:
-            flag = self.db.apply_rds_knobs(self.default_knobs)
+            flag = self.db.apply_knobs_online(self.default_knobs)
         else:
-            flag = self.db.apply_knobs(self.default_knobs)
-
+            flag = self.db.apply_knobs_offline(self.default_knobs)
 
         while not flag:
             logger.info('retrying: sleep for {} seconds'.format(RETRY_WAIT_TIME))
             time.sleep(RETRY_WAIT_TIME)
             logger.info('try apply default knobs again')
             if self.online_mode:
-                flag = self.db.apply_rds_knobs(self.default_knobs)
+                flag = self.db.apply_knobs_online(self.default_knobs)
             else:
-                flag = self.db.apply_knobs(self.default_knobs)
+                flag = self.db.apply_knobs_offline(self.default_knobs)
 
         logger.info('[DBG]. apply default knobs done')
 
-        s = self.get_states(collect_CPU)
+        s = self.get_states(collect_resource=collect_resource)
 
         while s == None:
             logger.info('retrying: sleep for {} seconds'.format(RETRY_WAIT_TIME))
             time.sleep(RETRY_WAIT_TIME)
             logger.info('try getting_states again')
-            s = self.get_states(collect_CPU)
+            s = self.get_states(collect_resource=collect_resource)
 
         external_metrics, internal_metrics, resource = s
 
@@ -388,15 +409,14 @@ class DBEnv():
         logger.info("[step {}] default:{}".format(self.step_count, res))
         return state, external_metrics, resource
 
-
-    def step_GP(self, knobs, best_action_applied=False):
-        return np.random.rand(6), np.random.rand(65), np.random.rand(8)
+    def step_GP(self, knobs, best_action_applied=False, collect_resource=True):
+        # return np.random.rand(6), np.random.rand(65), np.random.rand(8)
 
         if self.reinit_interval > 0 and self.reinit_interval % RESTART_FREQUENCY == 0:
             if self.reinit:
-                logger.info('reinitializing database begin')
-                self.reinitdb_magic()
-                logger.info('database reinitialized')
+                logger.info('reinitializing db begin')
+                self.db.reinitdb_magic(self.remote_mode)
+                logger.info('db reinitialized')
         self.step_count = self.step_count + 1
         self.reinit_interval = self.reinit_interval + 1
         for key in knobs.keys():
@@ -410,14 +430,11 @@ class DBEnv():
                 knobs[key] = self.knobs_detail[key]['min']
                 logger.info("{} with value of is smaller than min, adjusted".format(key))
         logger.info("[step {}] generate knobs: {}\n".format(self.step_count, knobs))
-        collect_resource = False
+
         if self.online_mode:
-            try:
-                flag = self.db.apply_rds_knobs(knobs)
-            except:
-                flag = self.db.apply_knobs(knobs)
+            flag = self.db.apply_knobs_online(knobs)
         else:
-            flag = self.db.apply_knobs(knobs)
+            flag = self.db.apply_knobs_offline(knobs)
 
         if not flag:
             if best_action_applied:
@@ -425,12 +442,12 @@ class DBEnv():
             else:
                 logger.info("[step {}] result:{}|tps_0|lat_300|[]|65d\n".format(self.step_count, knobs))
             if self.reinit:
-                logger.info('reinitializing database begin')
-                self.reinitdb_magic()
-                logger.info('database reinitialized')
+                logger.info('reinitializing db begin')
+                self.db.reinitdb_magic(self.remote_mode)
+                logger.info('db reinitialized')
             return [-1, 300, -1 ], np.array([0]*65), 0
 
-        s = self.get_states(collect_resource)
+        s = self.get_states(collect_resource=collect_resource)
 
         if s == None:
             if best_action_applied:
@@ -438,19 +455,12 @@ class DBEnv():
             else:
                 logger.info("[step {}] result:{}|tps_0|[]|65d\n".format(self.step_count, knobs))
             if self.reinit:
-                logger.info('reinitializing database begin')
-                self.reinitdb_magic()
-                logger.info('database reinitialized')
-            return [-1, 300, -1 ], np.array([0]*65), 0
+                logger.info('reinitializing db begin')
+                self.db.reinitdb_magic(self.remote_mode)
+                logger.info('db reinitialized')
+            return [-1, 300, -1 ], np.array([0]*self.db.num_metrics), 0
 
         external_metrics, internal_metrics, resource = s
-
-        '''while external_metrics[0] == 0 or sum(internal_metrics) == 0:
-            logger.info('retrying because got invalid metrics. Sleep for {} seconds.'.format(RETRY_WAIT_TIME))
-            time.sleep(RETRY_WAIT_TIME)
-            logger.info('try get_states again')
-            external_metrics, internal_metrics ,resource= self.get_states(collect_resource)
-            logger.info('metrics got again, {}|{}'.format(external_metrics, internal_metrics))'''
 
         format_str = '{}|tps_{}|lat_{}|qps_{}|tpsVar_{}|latVar_{}|qpsVar_{}|cpu_{}|readIO_{}|writeIO_{}|virtaulMem_{}|physical_{}|dirty_{}|hit_{}|data_{}|{}|65d\n'
         res = format_str.format(knobs, str(external_metrics[0]), str(external_metrics[1]), str(external_metrics[2]), external_metrics[3], external_metrics[4],
@@ -463,11 +473,8 @@ class DBEnv():
             logger.info("[step {}] result:{}".format(self.step_count, res))
         return external_metrics, internal_metrics, resource
 
-
-
     def terminate(self):
         return False
-
 
     def get_objs(self, res):
         if len(self.y_variable) == 1:
@@ -498,10 +505,6 @@ class DBEnv():
 
         return constraintL
 
-
-
-
-
     def step(self, config):
         f = open(self.lhs_log, 'a')
         knobs = config.get_dictionary().copy()
@@ -509,7 +512,7 @@ class DBEnv():
             if self.knobs_detail[k]['type'] == 'integer' and  self.knobs_detail[k]['max'] > sys.maxsize:
                 knobs[k] = knobs[k] * 1000
 
-        metrics, internal_metrics, resource = self.step_GP(knobs)
+        metrics, internal_metrics, resource = self.step_GP(knobs, collect_resource=True)
         # record = "{}|{}\n".format(knobs, list(internal_metrics))
         # f.write(record)
         format_str = '{}|tps_{}|lat_{}|qps_{}|tpsVar_{}|latVar_{}|qpsVar_{}|cpu_{}|readIO_{}|writeIO_{}|virtaulMem_{}|physical_{}|dirty_{}|hit_{}|data_{}|{}|{}d\n'

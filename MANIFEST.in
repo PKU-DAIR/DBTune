@@ -13,3 +13,4 @@ include autotune/transfer/*.py
 include autotune/transfer/tlbo/*.py
 include autotune/transfer/tlbo/*.py
 include autotune/utils/*
+include autotune/database/*.py

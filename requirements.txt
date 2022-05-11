@@ -28,3 +28,4 @@ aliyun-python-sdk-rds
 dynaconf
 shap
 lightgbm
+paramiko
