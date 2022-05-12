@@ -35,7 +35,7 @@ if __name__ == '__main__':
         # block wait for Benchmark-Finish msg
         sig = conn.recv()
         # terminate Resource Monitor
-        cpu = p.cpu_percent()
+        cpu = p.cpu_percent() / len(p.cpu_affinity())
         rm.terminate()
         # Send back Monitor Data
 

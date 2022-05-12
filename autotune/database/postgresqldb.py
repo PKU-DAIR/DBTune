@@ -1,11 +1,11 @@
-import logging
 import os
 import time
 import threading
 import subprocess
 import paramiko
-import multiprocessing as mp
 import numpy as np
+import multiprocessing as mp
+from getpass import getpass
 from autotune.dbconnector import PostgresqlConnector
 from autotune.knobs import logger
 from autotune.utils.parser import ConfigParser
@@ -35,8 +35,15 @@ class PostgresqlDB:
 
         # remote information
         self.remote_mode = eval(args['remote_mode'])
-        self.ssh_user = args['ssh_user']
-        self.ssh_passwd = args['ssh_passwd']
+        if self.remote_mode:
+            self.ssh_user = args['ssh_user']
+            self.ssh_pk_file = os.path.expanduser('~/.ssh/id_rsa')
+            self.pk = paramiko.RSAKey.from_private_key_file(self.ssh_pk_file)
+
+        # resource isolation information
+        self.isolation_mode = eval(args['isolation_mode'])
+        if self.isolation_mode:
+            self.ssh_passwd = getpass(prompt='Password on host for cgroups commands: ')
 
         # PostgreSQL Internal Metrics
         self.num_metrics = 60
@@ -76,15 +83,17 @@ class PostgresqlDB:
     def _gen_config_file(self, knobs):
         if self.remote_mode:
             cnf = '/tmp/pglocal.cnf'
-            transport = paramiko.Transport((self.host, 22))
-            transport.connect(username=self.ssh_user, password=self.ssh_passwd)
-            sftp = paramiko.SFTPClient.from_transport(transport)
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(self.host, username=self.ssh_user, pkey=self.pk,
+                        disabled_algorithms={'pubkeys': ['rsa-sha2-256', 'rsa-sha2-512']})
+            sftp = ssh.open_sftp()
             try:
                 sftp.get(self.pgcnf, cnf)
             except IOError:
                 print('PGCNF not exists!')
             if sftp: sftp.close()
-            if transport: transport.close()
+            if ssh: ssh.close()
         else:
             cnf = self.pgcnf
 
@@ -98,15 +107,17 @@ class PostgresqlDB:
         cnf_parser.replace('/tmp/postgres.cnf')
 
         if self.remote_mode:
-            transport = paramiko.Transport((self.host, 22))
-            transport.connect(username=self.ssh_user, password=self.ssh_passwd)
-            sftp = paramiko.SFTPClient.from_transport(transport)
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(self.host, username=self.ssh_user, pkey=self.pk,
+                        disabled_algorithms={'pubkeys': ['rsa-sha2-256', 'rsa-sha2-512']})
+            sftp = ssh.open_sftp()
             try:
                 sftp.put(cnf, self.pgcnf)
             except IOError:
                 print('PGCNF not exists!')
             if sftp: sftp.close()
-            if transport: transport.close()
+            if ssh: ssh.close()
 
         logger.info('generated config file done')
         return knobs_not_in_cnf
@@ -119,7 +130,8 @@ class PostgresqlDB:
         if self.remote_mode:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(self.host, username=self.ssh_user, password=self.ssh_passwd)
+            ssh.connect(self.host, username=self.ssh_user, pkey=self.pk,
+                        disabled_algorithms={'pubkeys': ['rsa-sha2-256', 'rsa-sha2-512']})
             ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command(kill_cmd)
             ret_code = ssh_stdout.channel.recv_exit_status()
             if ret_code == 0:
@@ -148,23 +160,25 @@ class PostgresqlDB:
         if self.remote_mode:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(self.host, username=self.ssh_user, password=self.ssh_passwd)
+            ssh.connect(self.host, username=self.ssh_user, pkey=self.pk,
+                        disabled_algorithms={'pubkeys': ['rsa-sha2-256', 'rsa-sha2-512']})
 
             start_cmd = '{} --config_file={}'.format(self.postgres, self.pgcnf)
             wrapped_cmd = 'echo $$; exec ' + start_cmd
             _, start_stdout, _ = ssh.exec_command(wrapped_cmd)
             self.pid = int(start_stdout.readline())
 
-            cgroup_cmd = 'sudo -S cgclassify -g memory,cpuset:sever ' + str(self.pid)
-            ssh_stdin, ssh_stdout, _ = ssh.exec_command(cgroup_cmd)
-            ssh_stdin.write(self.ssh_passwd + '\n')
-            ssh_stdin.flush()
-            ret_code = ssh_stdout.channel.recv_exit_status()
-            ssh.close()
-            if not ret_code:
-                logger.info('add {} to memory,cpuset:sever'.format(self.pid))
-            else:
-                logger.info('Failed: add {} to memory,cpuset:sever'.format(self.pid))
+            if self.isolation_mode:
+                cgroup_cmd = 'sudo -S cgclassify -g memory,cpuset:sever ' + str(self.pid)
+                ssh_stdin, ssh_stdout, _ = ssh.exec_command(cgroup_cmd)
+                ssh_stdin.write(self.ssh_passwd + '\n')
+                ssh_stdin.flush()
+                ret_code = ssh_stdout.channel.recv_exit_status()
+                ssh.close()
+                if not ret_code:
+                    logger.info('add {} to memory,cpuset:sever'.format(self.pid))
+                else:
+                    logger.info('Failed: add {} to memory,cpuset:sever'.format(self.pid))
 
         else:
             proc = subprocess.Popen([self.postgres, '--config_file={}'.format(self.pgcnf)])

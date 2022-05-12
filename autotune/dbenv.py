@@ -50,9 +50,6 @@ class DBEnv():
         self.default_knobs = get_default_knobs()
         self.online_mode = eval(args['online_mode'])
         self.remote_mode = eval(args['remote_mode'])
-        self.ssh_user = args['ssh_user']
-        self.ssh_passwd = args['ssh_passwd']
-        self.ssh_script_path = args['ssh_script_path']
         self.oltpbench_config_xml =args['oltpbench_config_xml']
         self.step_count = 0
         self.connect_sucess = True
@@ -100,8 +97,8 @@ class DBEnv():
             wl['type'] = self.args['workload_type']
         elif self.args['workload'].startswith('oltpbench_'):
             wl = dict(OLTPBENCH_WORKLOADS)
-            dbname = self.args['workload']  # strip oltpbench_
-            logger.info('use db name {} by default'.format(dbname))
+            dbname = self.args['dbname']  # strip oltpbench_
+            # logger.info('use db name {} by default'.format(dbname))
         # elif self.args['workload'] == 'workload_zoo':
         #     wl = dict(WORKLOAD_ZOO_WORKLOADS)
         elif self.args['workload']== 'job':
@@ -343,7 +340,7 @@ class DBEnv():
                 clientDB_conn.close()
 
             else:
-                cpu = p.cpu_percent()
+                cpu = p.cpu_percent() / len(p.cpu_affinity())
                 rm.terminate()
                 avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory = rm.get_monitor_data_avg()
         else:
