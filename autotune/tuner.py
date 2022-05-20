@@ -16,6 +16,7 @@ class DBTuner:
         self.method = args_tune['optimize_method']
         self.y_variable = env.y_variable
         self.transfer_framework = args_tune['transfer_framework']
+        self.hc_path = self.args_tune['data_repo']
 
         self.hcL = []
         self.model_params_path = ''
@@ -62,11 +63,11 @@ class DBTuner:
                 self.surrogate_type = 'gp'
 
         elif self.transfer_framework in ['workload_map', 'rgpe']:
-            files = os.listdir(self.args_tune['data_repo'])
+            files = os.listdir(self.hc_path)
             for f in files:
                 try:
                     task_id = f.split('.')[0].split('_')[-1]
-                    fn = os.path.join(self.args_tune['data_repo'], f)
+                    fn = os.path.join(self.hc_path, f)
                     history_container = HistoryContainer(task_id, config_space=self.config_space)
                     history_container.load_history_from_json(fn)
                     self.hcL.append(history_container)
@@ -101,7 +102,7 @@ class DBTuner:
                        num_objs=len(self.objs),
                        num_constraints=len(self.constraints),
                        optimizer_type=self.method,
-                       max_runs=210,
+                       max_runs=eval(self.args_tune['max_runs']),
                        surrogate_type=self.surrogate_type,
                        history_bo_data=self.hcL,
                        acq_optimizer_type='local_random',  # 'random_scipy',#

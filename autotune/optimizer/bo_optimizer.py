@@ -1,36 +1,25 @@
 # License: MIT
 
-import os
 import abc
 import numpy as np
-import sys
-import time
-import traceback
-import math
 from typing import List
 from collections import OrderedDict
-from tqdm import tqdm
 from autotune.utils.util_funcs import check_random_state
 from autotune.utils.logging_utils import get_logger
-from autotune.utils.history_container import HistoryContainer, MOHistoryContainer
-from autotune.utils.constants import MAXINT, SUCCESS
+from autotune.utils.history_container import HistoryContainer
 from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
 from autotune.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
 from autotune.utils.config_space.util import convert_configurations_to_array
-from autotune.utils.history_container import Observation
-from autotune.pipleline.base import BOBase
-from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
-from autotune.utils.limit import time_limit, TimeoutException
-from autotune.utils.util_funcs import get_result
-from autotune.selector.selector import SHAPSelector, fANOVASelector, GiniSelector, AblationSelector, LASSOSelector
-from autotune.optimizer.surrogate.core import build_surrogate, surrogate_switch
+from autotune.utils.constants import MAXINT
+from autotune.optimizer.surrogate.core import build_surrogate
 from autotune.optimizer.core import build_acq_func, build_optimizer
-import pdb
+
 
 class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
     def __init__(self,
                  config_space,
+                 history_container: HistoryContainer,
                  surrogate_type='auto',
                  acq_type='auto',
                  acq_optimizer_type='auto',
@@ -38,8 +27,6 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                  initial_configurations=None,
                  ref_point=None,
                  history_bo_data: List[OrderedDict] = None,
-                 logging_dir='logs',
-                 task_id='default_task_id',
                  random_state=None,
                  num_objs=1,
                  num_constraints=0,
@@ -52,8 +39,6 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         self.num_objs = num_objs
         self.num_constraints = num_constraints
         self.init_strategy = init_strategy
-        self.output_dir = logging_dir
-        self.task_id = task_id
         self.rng = check_random_state(random_state)
         self.logger = get_logger(self.__class__.__name__)
 
@@ -75,18 +60,12 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
         self.config_space_all = config_space
 
-        # init history container
-        if self.num_objs == 1:
-            self.history_container = HistoryContainer(task_id, self.num_constraints, config_space=self.config_space)
-        else:  # multi-objectives
-            self.history_container = MOHistoryContainer(task_id, self.num_objs, self.num_constraints, self.config_space, ref_point)
-
         # initial design
         if initial_configurations is not None and len(initial_configurations) > 0:
             self.initial_configurations = initial_configurations
             self.init_num = len(initial_configurations)
         else:
-            self.initial_configurations = self.create_initial_design(self.init_strategy)
+            self.initial_configurations = self.create_initial_design(self.init_strategy, excluded_configs=history_container.configurations)
             self.init_num = len(self.initial_configurations)
 
         self.surrogate_model = None
@@ -96,11 +75,6 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         self.auto_alter_model = False
         self.algo_auto_selection()
         self.check_setup()
-        self.setup_bo_basics()
-
-    def alter_config_space(self, new_config_space):
-        self.config_space = new_config_space
-        self.history_container.alter_configuration_space(new_config_space)
         self.setup_bo_basics()
 
     def algo_auto_selection(self):
@@ -270,27 +244,17 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                                          config_space=self.config_space,
                                          rng=self.rng)
 
-    def create_initial_design(self, init_strategy='default'):
-        """
-        Create several configurations as initial design.
-        Parameters
-        ----------
-        init_strategy: str
-
-        Returns
-        -------
-        Initial configurations.
-        """
+    def create_initial_design(self, init_strategy='default', excluded_configs=None):
         default_config = self.config_space.get_default_configuration()
         num_random_config = self.init_num - 1
         if init_strategy == 'random':
-            initial_configs = self.sample_random_configs(self.init_num)
+            initial_configs = self.sample_random_configs(self.init_num, excluded_configs)
             return initial_configs
         elif init_strategy == 'default':
-            initial_configs = [default_config] + self.sample_random_configs(num_random_config)
+            initial_configs = [default_config] + self.sample_random_configs(num_random_config, excluded_configs)
             return initial_configs
         elif init_strategy == 'random_explore_first':
-            candidate_configs = self.sample_random_configs(100)
+            candidate_configs = self.sample_random_configs(100, excluded_configs)
             return self.max_min_distance(default_config, candidate_configs, num_random_config)
         elif init_strategy == 'sobol':
             sobol = SobolSampler(self.config_space, num_random_config, random_state=self.rng)
@@ -326,18 +290,13 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
         return initial_configs
 
-
-    def get_surrogate(self, history_container=None):
-
-        if history_container is None:
-            history_container = self.history_container
+    def get_surrogate(self, history_container: HistoryContainer):
 
         X = convert_configurations_to_array(history_container.configurations)
         Y = history_container.get_transformed_perfs()
         cY = history_container.get_transformed_constraint_perfs()
 
         if self.num_objs == 1:
-            # TODO: different train interface
             if self.surrogate_type.startswith('tlbo_'):
                 self.surrogate_model.train(history_container)
             else:
@@ -355,39 +314,26 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         for i in range(self.num_constraints):
             self.constraint_models[i].train(X, cY[:, i])
 
-        return X, Y
+        return X, Y, cY
 
-
-    def get_suggestion(self, history_container=None, return_list=False):
-        """
-        Generate a configuration (suggestion) for this query.
-        Returns
-        -------
-        A configuration.
-        """
-
+    def get_suggestion(self, history_container: HistoryContainer, return_list=False):
         # if have enough data, get_suggorate
-        num_config_evaluated = len(self.history_container.configurations)
-        if num_config_evaluated >= self.init_num:
-            X, Y = self.get_surrogate()
-
-        if history_container is None:
-            history_container = self.history_container
-
-        self.alter_model(history_container)
-
         num_config_evaluated = len(history_container.configurations)
         num_config_successful = len(history_container.successful_perfs)
 
         if num_config_evaluated < self.init_num:
             return self.initial_configurations[num_config_evaluated]
 
+        X, Y, cY = self.get_surrogate(history_container)
+
+        self.alter_model(history_container)
+
         if self.optimization_strategy == 'random':
-            return self.sample_random_configs(1, history_container)[0]
+            return self.sample_random_configs(num_configs=1, excluded_configs=history_container.configurations)[0]
 
         if (not return_list) and self.rng.random() < self.rand_prob:
             self.logger.info('Sample random config. rand_prob=%f.' % self.rand_prob)
-            return self.sample_random_configs(1, history_container)[0]
+            return self.sample_random_configs(num_configs=1, excluded_configs=history_container.configurations)[0]
 
         if self.optimization_strategy == 'bo':
             # update acquisition function
@@ -432,38 +378,11 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                     return config
             self.logger.warning('Cannot get non duplicate configuration from BO candidates (len=%d). '
                                 'Sample random config.' % (len(challengers.challengers), ))
-            return self.sample_random_configs(1, history_container)[0]
+            return self.sample_random_configs(num_configs=1, excluded_configs=history_container.configurations)[0]
         else:
             raise ValueError('Unknown optimization strategy: %s.' % self.optimization_strategy)
 
-    def update_observation(self, observation: Observation):
-        """
-        Update the current observations.
-        Parameters
-        ----------
-        observation
-
-        Returns
-        -------
-
-        """
-        return self.history_container.update_observation(observation)
-
-    def sample_random_configs(self, num_configs=1, history_container=None, excluded_configs=None):
-        """
-        Sample a batch of random configurations.
-        Parameters
-        ----------
-        num_configs
-
-        history_container
-
-        Returns
-        -------
-
-        """
-        if history_container is None:
-            history_container = self.history_container
+    def sample_random_configs(self, num_configs=1, excluded_configs=None):
         if excluded_configs is None:
             excluded_configs = set()
 
@@ -473,7 +392,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         while len(configs) < num_configs:
             config = self.config_space.sample_configuration()
             sample_cnt += 1
-            if config not in (history_container.configurations + configs) and config not in excluded_configs:
+            if config not in configs and config not in excluded_configs:
                 configs.append(config)
                 sample_cnt = 0
                 continue

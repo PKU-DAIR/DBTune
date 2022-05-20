@@ -199,6 +199,141 @@ class HistoryContainer(object):
     def get_incumbents(self):
         return self.incumbents
 
+    def save_json(self, fn: str = "history_container.json"):
+        data = []
+        for i in range(len(self.perfs)):
+            tmp = {
+                'configuration': self.configurations[i].get_dictionary(),
+                'external_metrics': self.external_metrics[i],
+                'internal_metrics': self.internal_metrics[i],
+                'resource': self.resource[i],
+                'trial_state': self.trial_states[i],
+                'elapsed_time': self.elapsed_times[i]
+            }
+            data.append(tmp)
+
+        with open(fn, "w") as fp:
+            json.dump({"info": self.info,  "data": data}, fp, indent=2)
+
+    def load_history_from_json(self, fn: str = "history_container.json"):  # todo: all configs
+        try:
+            with open(fn) as fp:
+                all_data = json.load(fp)
+        except Exception as e:
+            self.logger.warning(
+                'Encountered exception %s while reading runhistory from %s. '
+                'Not adding any runs!', e, fn,
+            )
+            return
+
+        info = all_data["info"]
+        data = all_data["data"]
+
+        y_variable = info['objs'][0]
+        c_variables = info['constraints']
+        self.num_constraints = len(c_variables)
+        self.info = info
+
+        knobs_source = data[0]['configuration'].keys()
+        knobs_target = self.config_space.get_hyperparameter_names()
+        knobs_delete = [knob for knob in knobs_source if knob not in knobs_target]
+        knobs_add = [knob for knob in knobs_target if knob not in knobs_source]
+        knobs_default = self.config_space.get_default_configuration().get_dictionary()
+
+        for tmp in data:
+            config_dict = tmp['configuration'].copy()
+            for knob in knobs_delete:
+                config_dict.pop(knob)
+            for knob in knobs_add:
+                config_dict[knob] = knobs_default[knob]
+
+            config = Configuration(self.config_space, config_dict)
+            em = tmp['external_metrics']
+            im = tmp['internal_metrics']
+            resource = tmp['resource']
+            trial_state = tmp['trial_state']
+            elapsed_time = tmp['elapsed_time']
+
+            self.configurations.append(config)
+            self.configurations_all.append(self.fill_default_value(config))
+            self.perfs.append(em[y_variable])
+            self.trial_states.append(trial_state)
+            constraints = []
+            for c in c_variables:
+                if c in em.keys():
+                    constraints.append(em[c])
+                else:
+                    constraints.append(resource[c])
+            self.constraint_perfs.append(constraints)
+            self.elapsed_times.append(elapsed_time)
+            self.internal_metrics.append(im)
+            self.external_metrics.append(em)
+            self.resource.append(resource)
+
+            transform_perf = False
+            failed = False
+            if trial_state == SUCCESS and em[y_variable] < MAXINT:
+                if self.num_constraints > 0 and constraints is None:
+                    self.logger.error('Constraint is None in a SUCCESS trial!')
+                    failed = True
+                    transform_perf = True
+                else:
+                    # If infeasible, transform perf to the largest found objective value
+                    feasible = True
+                    if self.num_constraints > 0 and any(c > 0 for c in constraints):
+                        transform_perf = True
+                        feasible = False
+
+                    self.successful_perfs.append(em[y_variable])
+                    if feasible:
+                        self.add(config, em[y_variable])
+                    else:
+                        self.add(config, MAXINT)
+
+                    self.perc = np.percentile(self.successful_perfs, self.scale_perc, axis=0)
+                    self.min_y = np.min(self.successful_perfs, axis=0).tolist()
+                    self.max_y = np.max(self.successful_perfs, axis=0).tolist()
+
+            else:
+                # failed trial
+                failed = True
+                transform_perf = True
+
+            cur_idx = len(self.perfs) - 1
+            if transform_perf:
+                self.transform_perf_index.append(cur_idx)
+            if failed:
+                self.failed_index.append(cur_idx)
+
+    def alter_configuration_space(self, new_sapce: ConfigurationSpace):
+        configurations = []
+        data = collections.OrderedDict()
+        for c in  self.configurations_all:
+            values = {}
+            for key in new_sapce._hyperparameters:
+                if key in c.keys():
+                    values[key] = c[key]
+                else:
+                    values[key] = self.config_space_all._hyperparameters[key].default_value
+
+            c_new = Configuration(new_sapce, values)
+            configurations.append(c_new)
+
+        for c in list(self.data_all.keys()):
+            perf = self.data_all[c]
+            values = {}
+            for key in new_sapce._hyperparameters:
+                if key in c.keys():
+                    values[key] = c[key]
+                else:
+                    values[key] = self.config_space_all._hyperparameters[key].default_value
+            c_new = Configuration(new_sapce, values)
+            data[c_new] = perf
+
+
+        self.configurations = configurations
+        self.data = data
+
     def get_str(self):
         from terminaltables import AsciiTable
         incumbents = self.get_incumbents()
@@ -406,140 +541,6 @@ class HistoryContainer(object):
         importance_table = AsciiTable(table_data).table
         return importance_table
 
-    def save_json(self, fn: str = "history_container.json"):
-        data = []
-        for i in range(len(self.perfs)):
-            tmp = {
-                'configuration': self.configurations[i].get_dictionary(),
-                'external_metrics': self.external_metrics[i],
-                'internal_metrics': self.internal_metrics[i],
-                'resource': self.resource[i],
-                'trial_state': self.trial_states[i],
-                'elapsed_time': self.elapsed_times[i]
-            }
-            data.append(tmp)
-
-        with open(fn, "w") as fp:
-            json.dump({"info": self.info,  "data": data}, fp, indent=2)
-
-    def load_history_from_json(self, fn: str = "history_container.json"):  # todo: all configs
-        try:
-            with open(fn) as fp:
-                all_data = json.load(fp)
-        except Exception as e:
-            self.logger.warning(
-                'Encountered exception %s while reading runhistory from %s. '
-                'Not adding any runs!', e, fn,
-            )
-            return
-
-        info = all_data["info"]
-        data = all_data["data"]
-
-        y_variable = info['objs'][0]
-        c_variables = info['constraints']
-        self.num_constraints = len(c_variables)
-        self.info = info
-
-        knobs_source = data[0]['configuration'].keys()
-        knobs_target = self.config_space.get_hyperparameter_names()
-        knobs_delete = [knob for knob in knobs_source if knob not in knobs_target]
-        knobs_add = [knob for knob in knobs_target if knob not in knobs_source]
-        knobs_default = self.config_space.get_default_configuration().get_dictionary()
-
-        for tmp in data:
-            config_dict = tmp['configuration'].copy()
-            for knob in knobs_delete:
-                config_dict.pop(knob)
-            for knob in knobs_add:
-                config_dict[knob] = knobs_default[knob]
-
-            config = Configuration(self.config_space, config_dict)
-            em = tmp['external_metrics']
-            im = tmp['internal_metrics']
-            resource = tmp['resource']
-            trial_state = tmp['trial_state']
-            elapsed_time = tmp['elapsed_time']
-
-            self.configurations.append(config)
-            self.configurations_all.append(self.fill_default_value(config))
-            self.perfs.append(em[y_variable])
-            self.trial_states.append(trial_state)
-            constraints = []
-            for c in c_variables:
-                if c in em.keys():
-                    constraints.append(em[c])
-                else:
-                    constraints.append(resource[c])
-            self.constraint_perfs.append(constraints)
-            self.elapsed_times.append(elapsed_time)
-            self.internal_metrics.append(im)
-            self.external_metrics.append(em)
-            self.resource.append(resource)
-
-            transform_perf = False
-            failed = False
-            if trial_state == SUCCESS and em[y_variable] < MAXINT:
-                if self.num_constraints > 0 and constraints is None:
-                    self.logger.error('Constraint is None in a SUCCESS trial!')
-                    failed = True
-                    transform_perf = True
-                else:
-                    # If infeasible, transform perf to the largest found objective value
-                    feasible = True
-                    if self.num_constraints > 0 and any(c > 0 for c in constraints):
-                        transform_perf = True
-                        feasible = False
-
-                    self.successful_perfs.append(em[y_variable])
-                    if feasible:
-                        self.add(config, em[y_variable])
-                    else:
-                        self.add(config, MAXINT)
-
-                    self.perc = np.percentile(self.successful_perfs, self.scale_perc, axis=0)
-                    self.min_y = np.min(self.successful_perfs, axis=0).tolist()
-                    self.max_y = np.max(self.successful_perfs, axis=0).tolist()
-
-            else:
-                # failed trial
-                failed = True
-                transform_perf = True
-
-            cur_idx = len(self.perfs) - 1
-            if transform_perf:
-                self.transform_perf_index.append(cur_idx)
-            if failed:
-                self.failed_index.append(cur_idx)
-
-    def alter_configuration_space(self, new_sapce: ConfigurationSpace):
-        configurations = []
-        data = collections.OrderedDict()
-        for c in  self.configurations_all:
-            values = {}
-            for key in new_sapce._hyperparameters:
-                if key in c.keys():
-                    values[key] = c[key]
-                else:
-                    values[key] = self.config_space_all._hyperparameters[key].default_value
-
-            c_new = Configuration(new_sapce, values)
-            configurations.append(c_new)
-
-        for c in list(self.data_all.keys()):
-            perf = self.data_all[c]
-            values = {}
-            for key in new_sapce._hyperparameters:
-                if key in c.keys():
-                    values[key] = c[key]
-                else:
-                    values[key] = self.config_space_all._hyperparameters[key].default_value
-            c_new = Configuration(new_sapce, values)
-            data[c_new] = perf
-
-
-        self.configurations = configurations
-        self.data = data
 
 class MOHistoryContainer(HistoryContainer):
     """

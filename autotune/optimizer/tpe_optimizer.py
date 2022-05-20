@@ -9,12 +9,10 @@ import statsmodels.api as sm
 
 from autotune.utils.util_funcs import check_random_state
 from autotune.utils.history_container import HistoryContainer
-from autotune.core.base import Observation
 from autotune.utils.config_space.util import convert_configurations_to_array
 
 
 class TPE_Optimizer:
-    # TODO：Add warm start
     def __init__(self, config_space,
                  min_points_in_model=None,
                  top_n_percent=15,
@@ -22,8 +20,6 @@ class TPE_Optimizer:
                  random_fraction=1 / 3,
                  bandwidth_factor=3,
                  min_bandwidth=1e-3,
-                 task_id='default_task_id',
-                 output_dir='logs',
                  random_state=None):
         self.rng = check_random_state(random_state)
         self.config_space = config_space
@@ -32,9 +28,6 @@ class TPE_Optimizer:
         self.top_n_percent = top_n_percent
         self.bw_factor = bandwidth_factor
         self.min_bandwidth = min_bandwidth
-
-        self.history_container = HistoryContainer(task_id, config_space=config_space)
-        self.output_dir = output_dir
 
         self.min_points_in_model = min_points_in_model
         if min_points_in_model is None:
@@ -68,33 +61,7 @@ class TPE_Optimizer:
         self.kde_models = dict()
         self.logger = logging.getLogger(self.__class__.__name__)
 
-
-    def alter_config_space(self, new_config_space):
-        self.config_space = new_config_space
-        self.history_container.alter_configuration_space(new_config_space)
-
-        hps = self.config_space.get_hyperparameters()
-        self.kde_vartypes = ""
-        self.vartypes = []
-
-        for h in hps:
-            if hasattr(h, 'choices'):
-                self.kde_vartypes += 'u'
-                self.vartypes += [len(h.choices)]
-            else:
-                self.kde_vartypes += 'c'
-                self.vartypes += [0]
-
-        self.vartypes = np.array(self.vartypes, dtype=int)
-
-
-    def update_observation(self, observation: Observation):
-        self.history_container.update_observation(observation)
-
-    def get_suggestion(self, history_container=None):
-        if history_container is None:
-            history_container = self.history_container
-
+    def get_suggestion(self, history_container: HistoryContainer):
         # use default as first config
         num_config_evaluated = len(history_container.configurations)
         if num_config_evaluated == 0:
@@ -105,7 +72,7 @@ class TPE_Optimizer:
 
         # If no model is available, sample random config
         if len(self.kde_models.keys()) == 0 or self.rng.rand() < self.random_fraction:
-            return self.sample_random_configs(1, history_container)[0]
+            return self.sample_random_configs(1, excluded_configs=history_container.configurations)[0]
 
         best = np.inf
         best_vector = None
@@ -165,7 +132,7 @@ class TPE_Optimizer:
             if best_vector is None:
                 self.logger.debug(
                     "Sampling based optimization with %i samples failed -> using random configuration" % self.num_samples)
-                config = self.sample_random_configs(1, history_container)[0]
+                config = self.sample_random_configs(num_configs=1, excluded_configs=history_container.configurations)[0]
             else:
                 self.logger.debug(
                     'best_vector: {}, {}, {}, {}'.format(best_vector, best, l(best_vector), g(best_vector)))
@@ -190,7 +157,7 @@ class TPE_Optimizer:
             self.logger.warning(
                 "Sampling based optimization with %i samples failed\n %s \nUsing random configuration" % (
                     self.num_samples, traceback.format_exc()))
-            config = self.sample_random_configs(1, history_container)[0]
+            config = self.sample_random_configs(num_configs=1, excluded_configs=history_container.configurations)[0]
 
         return config
 
@@ -275,18 +242,9 @@ class TPE_Optimizer:
             'done building a new model based on %i/%i split\nBest loss for this budget:%f\n\n\n\n\n' % (
                 n_good, n_bad, np.min(train_losses)))
 
-    def sample_random_configs(self, num_configs=1, history_container=None):
-        """
-        Sample a batch of random configurations.
-        Parameters
-        ----------
-        num_configs
-        history_container
-        Returns
-        -------
-        """
-        if history_container is None:
-            history_container = self.history_container
+    def sample_random_configs(self, num_configs=1, excluded_configs=None):
+        if excluded_configs is None:
+            excluded_configs = []
 
         configs = list()
         sample_cnt = 0
@@ -294,7 +252,7 @@ class TPE_Optimizer:
         while len(configs) < num_configs:
             config = self.config_space.sample_configuration()
             sample_cnt += 1
-            if config not in (history_container.configurations + configs):
+            if config not in configs and config not in excluded_configs:
                 configs.append(config)
                 sample_cnt = 0
                 continue
@@ -303,6 +261,3 @@ class TPE_Optimizer:
                 configs.append(config)
                 sample_cnt = 0
         return configs
-
-    def get_history(self):
-        return self.history_container

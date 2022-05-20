@@ -1,6 +1,5 @@
-
 import abc
-import numpy as np
+import pdb
 import random
 
 from autotune.utils.util_funcs import check_random_state
@@ -8,13 +7,13 @@ from autotune.utils.logging_utils import get_logger
 from autotune.utils.history_container import HistoryContainer
 from autotune.utils.constants import MAXINT, SUCCESS
 from autotune.utils.config_space import get_one_exchange_neighbourhood
-from autotune.core.base import Observation
+from autotune.utils.history_container import Observation
 
 
 class GA_Optimizer(object, metaclass=abc.ABCMeta):
 
-
     def __init__(self, config_space,
+                 history_container: HistoryContainer,
                  num_objs=1,
                  num_constraints=0,
                  population_size=30,
@@ -22,9 +21,7 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
                  epsilon=0.2,
                  strategy='worst',  # 'worst', 'oldest'
                  optimization_strategy='ea',
-                 batch_size=1,
                  output_dir='logs',
-                 task_id='default_task_id',
                  random_state=None):
 
         # Create output (logging) directory.
@@ -40,15 +37,11 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
         self.config_space.seed(self.config_space_seed)
         self.logger = get_logger(self.__class__.__name__)
 
-        # Init parallel settings
-        self.batch_size = batch_size
-        self.init_num = batch_size  # for compatibility in pSMBO
-        self.running_configs = list()
-
         # Basic components in Advisor.
         self.optimization_strategy = optimization_strategy
 
         # Init the basic ingredients
+        self.running_configs = list()
         self.all_configs = set()
         self.age = 0
         self.population = list()
@@ -59,24 +52,39 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
         self.strategy = strategy
         assert self.strategy in ['worst', 'oldest']
 
-        # init history container
-        self.history_container = HistoryContainer(task_id, self.num_constraints, config_space=self.config_space)
+        # initialize
+        self.initialize(history_container)
 
+    def initialize(self, history_container: HistoryContainer):
+        all_configs = history_container.get_all_configs()
+        all_perfs = history_container.get_all_perfs()
+        self.all_configs = set(all_configs)
 
-    def alter_config_space(self, new_config_space):
-        self.config_space = new_config_space
-        self.history_container.alter_configuration_space(new_config_space)
+        num_config_evaluated = len(history_container.configurations)
+        for i in range(num_config_evaluated):
+            self.population.append(dict(config=all_configs[i], age=self.age, perf=all_perfs[i]))
+            self.age += 1
 
-    def get_suggestion(self, history_container=None):
+        if self.strategy == 'oldest':
+            self.population.sort(key=lambda x: x['age'])
+        elif self.strategy == 'worst':
+            self.population.sort(key=lambda x: x['perf'])
+
+        while len(self.population) > self.population_size:
+            if self.strategy == 'oldest':
+                self.population.pop(0)
+            elif self.strategy == 'worst':
+                self.population.pop(-1)
+            else:
+                raise ValueError('Unknown strategy: %s' % self.strategy)
+
+    def get_suggestion(self, history_container: HistoryContainer):
         """
         Generate a configuration (suggestion) for this query.
         Returns
         -------
         A configuration.
         """
-        if history_container is None:
-            history_container = self.history_container
-
         if len(self.population) < self.population_size:
             # Initialize population
             next_config = self.sample_random_config(excluded_configs=self.all_configs)
@@ -103,17 +111,7 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
         self.running_configs.append(next_config)
         return next_config
 
-    def get_suggestions(self, batch_size=None, history_container=None):
-        if batch_size is None:
-            batch_size = self.batch_size
-
-        configs = list()
-        for i in range(batch_size):
-            config = self.get_suggestion(history_container)
-            configs.append(config)
-        return configs
-
-    def update_observation(self, observation: Observation):
+    def update(self, observation: Observation):
         """
         Update the current observations.
         Parameters
@@ -146,8 +144,6 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
             else:
                 raise ValueError('Unknown strategy: %s' % self.strategy)
 
-        return self.history_container.update_observation(observation)
-
     def sample_random_config(self, excluded_configs=None):
         if excluded_configs is None:
             excluded_configs = set()
@@ -163,6 +159,3 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
                 self.logger.warning('Cannot sample non duplicate configuration after %d iterations.' % max_sample_cnt)
                 break
         return config
-
-    def get_history(self):
-        return self.history_container

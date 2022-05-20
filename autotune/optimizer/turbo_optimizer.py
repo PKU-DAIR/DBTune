@@ -1,8 +1,4 @@
-import traceback
 import logging
-import ConfigSpace
-import ConfigSpace.hyperparameters
-import ConfigSpace.util
 import numpy as np
 
 import math
@@ -10,20 +6,14 @@ import sys
 from copy import deepcopy
 
 import gpytorch
-import numpy as np
 import torch
 from torch.quasirandom import SobolEngine
-
 from autotune.optimizer.surrogate.base.gp_for_turbo import train_gp
 import pdb
 
-from autotune.utils.util_funcs import check_random_state
-from autotune.utils.history_container import HistoryContainer
-from autotune.core.base import Observation
-from autotune.utils.config_space.util import convert_configurations_to_array
-from autotune.utils.config_space import ConfigurationSpace, Configuration, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
-
-import numpy as np
+from autotune.utils.history_container import HistoryContainer, Observation
+from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
+from autotune.utils.config_space import Configuration, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
 
 
 class TURBO_Optimizer:
@@ -31,19 +21,16 @@ class TURBO_Optimizer:
                  initial_trials=3,
                  n_trust_regions=3,
                  init_strategy='random_explore_first',
-                 initial_configurations=None,
                  batch_size=1,
                  use_ard=True,
                  verbose=True,
                  max_cholesky_size=2000,
                  n_training_steps=50,
                  min_cuda=1024,
-                 task_id='default_task_id',
                  device="cpu",
                  dtype="float64"):
 
         self.config_space = config_space
-        self.history_container = HistoryContainer(task_id, 0, config_space=self.config_space)
         self.dim = len(config_space.get_hyperparameter_names())
         # Settings
         self.n_trust_regions = n_trust_regions
@@ -98,7 +85,6 @@ class TURBO_Optimizer:
         self.init_append = False
         self.init_append_step = 0
 
-
     def _restart(self):
         self._idx = np.zeros((0, 1), dtype=int)  # Track what trust region proposed what using an index vector
         self.failcount = np.zeros(self.n_trust_regions, dtype=int)
@@ -125,7 +111,6 @@ class TURBO_Optimizer:
 
         return X_next, idx_next
 
-
     def _adjust_length(self, fX_next, i):
         assert i >= 0 and i <= self.n_trust_regions - 1
 
@@ -144,7 +129,7 @@ class TURBO_Optimizer:
             self.length[i] /= 2.0
             self.failcount[i] = 0
 
-    def create_initial_design(self, init_num, init_strategy='default'):
+    def create_initial_design(self, init_num, init_strategy='default', excluded_configs=None):
         """
             Create several configurations as initial design.
             Parameters
@@ -158,13 +143,13 @@ class TURBO_Optimizer:
         default_config = self.config_space.get_default_configuration()
         num_random_config = init_num - 1
         if init_strategy == 'random':
-            initial_configs = self.sample_random_configs(self.init_num)
+            initial_configs = self.sample_random_configs(init_num, excluded_configs)
             return initial_configs
         elif init_strategy == 'default':
-            initial_configs = [default_config] + self.sample_random_configs(num_random_config)
+            initial_configs = [default_config] + self.sample_random_configs(num_random_config, excluded_configs)
             return initial_configs
         elif init_strategy == 'random_explore_first':
-            candidate_configs = self.sample_random_configs(100)
+            candidate_configs = self.sample_random_configs(100, excluded_configs)
             return self.max_min_distance(default_config, candidate_configs, num_random_config)
         elif init_strategy == 'sobol':
             sobol = SobolSampler(self.config_space, num_random_config, random_state=self.rng)
@@ -177,11 +162,7 @@ class TURBO_Optimizer:
         else:
             raise ValueError('Unknown initial design strategy: %s.' % init_strategy)
 
-
-    def get_suggestion(self, history_container=None, return_list=False):
-        if history_container is None:
-            history_container = self.history_container
-
+    def get_suggestion(self, history_container: HistoryContainer):
         # if have enough data, get_suggorate
         num_config_evaluated = len(history_container.configurations)
         if num_config_evaluated < self.init_num:
@@ -234,10 +215,6 @@ class TURBO_Optimizer:
         # Undo the warping
         #X_next = from_unit_cube(X_next, self.lb, self.ub)
         return  Configuration(self.config_space, vector=X_next.reshape(-1, self.batch_size))
-
-
-
-
 
     def _create_candidates(self, X, fX, length, n_training_steps, hypers):
         """Generate candidates assuming X has been scaled to [0,1]^d."""
@@ -316,7 +293,7 @@ class TURBO_Optimizer:
 
         return X_cand, y_cand, hypers
 
-    def update_observation(self, observation: Observation):
+    def update(self, observation: Observation):
         """
         Update the current observations.
         Parameters
@@ -342,7 +319,7 @@ class TURBO_Optimizer:
         self._idx = np.vstack((self._idx, idx_next))
         self.n_evals += 1
         if self.evluate_init:
-            return self.history_container.update_observation(observation)
+            return
 
         # Update trust regions
         for i in range(self.n_trust_regions):
@@ -386,10 +363,9 @@ class TURBO_Optimizer:
                     print(f"{n_evals}) TR-{i} is restarting ")
                     sys.stdout.flush()
 
-        return self.history_container.update_observation(observation)
+        return
 
-
-    def sample_random_configs(self, num_configs=1, history_container=None, excluded_configs=None):
+    def sample_random_configs(self, num_configs=1, excluded_configs=None):
         """
         Sample a batch of random configurations.
         Parameters
@@ -402,10 +378,8 @@ class TURBO_Optimizer:
         -------
 
         """
-        if history_container is None:
-            history_container = self.history_container
         if excluded_configs is None:
-            excluded_configs = set()
+            excluded_configs = []
 
         configs = list()
         sample_cnt = 0
@@ -413,7 +387,7 @@ class TURBO_Optimizer:
         while len(configs) < num_configs:
             config = self.config_space.sample_configuration()
             sample_cnt += 1
-            if config not in (history_container.configurations + configs) and config not in excluded_configs:
+            if config not in configs and config not in excluded_configs:
                 configs.append(config)
                 sample_cnt = 0
                 continue
@@ -445,42 +419,6 @@ class TURBO_Optimizer:
                 min_dis[j] = min(updated_dis, min_dis[j])
 
         return initial_configs
-
-    def alter_config_space(self, new_config_space):
-        X = self.X.copy()
-        X_new = np.zeros((0, len(new_config_space._hyperparameters.keys())))
-
-        keys = self.config_space.get_hyperparameter_names()
-        for key in keys:
-            if type(self.config_space.get_hyperparameters_dict()[key]) == CategoricalHyperparameter:
-                X[:, keys.index(key)] = np.round(self.X[:, keys.index(key)] * (self.config_space.get_hyperparameters_dict()[key].num_choices - 1))
-
-        for i in range(self.X.shape[0]):
-            c = Configuration(self.config_space, vector=X[i,:].reshape(-1, self.batch_size))
-            config = c.get_dictionary()
-            new_config = {}
-            for k in new_config_space._hyperparameters.keys():
-                if k in config.keys():
-                    new_config[k] = config[k]
-                else:
-                    new_config[k] = new_config_space._hyperparameters[k].default_value
-            c_new = Configuration(new_config_space, new_config)
-
-            x = c_new.get_array()
-            keys = new_config_space.get_hyperparameter_names()
-
-            for key in keys:
-                if type(new_config_space.get_hyperparameters_dict()[key]) == CategoricalHyperparameter:
-                    x[keys.index(key)] = x[keys.index(key)] / (
-                                new_config_space.get_hyperparameters_dict()[key].num_choices - 1)
-
-            X_new = np.vstack((X_new, x))
-
-        self.X = X_new
-        self.hypers = [{} for _ in range(self.n_trust_regions)]
-        self.dim = len(new_config_space.get_hyperparameter_names())
-        self.config_space = new_config_space
-        self.history_container.alter_configuration_space(new_config_space)
 
 
 

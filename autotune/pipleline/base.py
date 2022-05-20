@@ -11,14 +11,14 @@ from autotune.utils.logging_utils import setup_logger, get_logger
 
 
 class BOBase(object, metaclass=abc.ABCMeta):
-    def __init__(self, objective_function, config_space, task_id='task_id', output_dir='logs/',
+    def __init__(self, objective_function, config_space, task_id='task_id', logging_dir='logs/',
                  random_state=None, initial_runs=3, max_runs=50, runtime_limit=None,
                  sample_strategy='bo', surrogate_type='gp',
                  history_bo_data: List[OrderedDict] = None,
                  time_limit_per_trial=600):
-        self.output_dir = output_dir
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
+        self.logging_dir = logging_dir
+        if not os.path.exists(self.logging_dir):
+            os.makedirs(self.logging_dir)
 
         self.task_id = task_id
         _time_stamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
@@ -46,16 +46,8 @@ class BOBase(object, metaclass=abc.ABCMeta):
     def iterate(self):
         raise NotImplementedError()
 
-    def get_history(self):
-        assert self.optimizer is not None
-        return self.optimizer.history_container
-
-    def get_incumbent(self):
-        assert self.optimizer is not None
-        return self.optimizer.history_container.get_incumbents()
-
     def _get_logger(self, name):
-        logger_name = 'OpenBox-%s' % name
-        self.logger_name = os.path.join(self.output_dir, '%s.log' % str(logger_name))
+        logger_name = 'DBTune-%s' % name
+        self.logger_name = os.path.join(self.logging_dir, '%s.log' % str(logger_name))
         setup_logger(self.logger_name)
         return get_logger(logger_name)

@@ -1,21 +1,12 @@
-import traceback
 import logging
-import ConfigSpace
-import ConfigSpace.hyperparameters
-import ConfigSpace.util
 import numpy as np
 import os
-import time
-import scipy.stats as sps
-import statsmodels.api as sm
 import math
+import pickle
 
 from autotune.optimizer.surrogate.ddpg.ddpg import DDPG
-from autotune.utils.util_funcs import check_random_state
-from autotune.utils.history_container import HistoryContainer
-from autotune.utils.history_container import Observation
-from autotune.utils.config_space.util import convert_configurations_to_array
-from autotune.utils.config_space import ConfigurationSpace, Configuration, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
+from autotune.utils.history_container import Observation, HistoryContainer
+from autotune.utils.config_space import Configuration, CategoricalHyperparameter
 from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
 
 
@@ -25,42 +16,59 @@ def create_output_folders():
         if not os.path.exists(folder):
             os.mkdir(folder)
 
-class DDPG_Optimizer():
+
+class DDPG_Optimizer:
     def __init__(self, config_space,
+                 history_container: HistoryContainer,
                  knobs_num,
                  metrics_num,
                  task_id,
-                 initial_trials=3,
+                 initial_trials=5,
                  init_strategy="random_explore_first",
-                 initial_configurations=None,
-                 mean_var_file='mean_var_file.pkl',
+                 mean_var_file='',
                  batch_size=16,
                  params=''):
 
         self.task_id = task_id
         self.config_space = config_space
-        self.history_container = HistoryContainer(task_id, config_space=config_space)
         self.logger = logging.getLogger(self.__class__.__name__)
         self.knobs_num = knobs_num
         self.metrics_num = metrics_num
         self.batch_size = batch_size
-        self.mean_var_file = mean_var_file
         self.params = params
-        self.need_init = True
-
         self.init_num = initial_trials
-        self.initial_configurations = self.create_initial_design(self.init_num, init_strategy)
+        self.initial_configurations = self.create_initial_design(init_strategy, excluded_configs=history_container.configurations)
+
+        self.mean_var_file = mean_var_file
+        self.internal_metrics = []
+        self.state_mean = None
+        self.state_var = None
+        self.model = None
         self.init_step = 0
-        self.create_model()
-
-        create_output_folders()
-
         self.episode = 0
         self.global_t = 0
         self.t = 0
         self.score = 0
+        self.episode_init = True
+        create_output_folders()
+
+        if self.mean_var_file != '' and os.path.exists(self.mean_var_file):
+            with open(self.mean_var_file, 'rb') as f:
+                self.state_mean = pickle.load(f)
+                self.state_var = pickle.load(f)
+        else:
+            for im in history_container.internal_metrics:
+                self.internal_metrics.append(im)
+            if len(self.internal_metrics) >= self.init_num:
+                self.gen_mean_var()
+
+        if not self.create_model():
+            self.logger.info('Calculate state mean and var.')
 
     def create_model(self):
+        if (self.state_mean is None) or (self.state_var is None):
+            return False
+
         ddpg_opt = {
             'tau': 0.002,
             'alr': 0.001,
@@ -75,34 +83,30 @@ class DDPG_Optimizer():
                           n_actions=self.knobs_num,
                           opt=ddpg_opt,
                           ouprocess=True,
-                          mean_var_path=self.mean_var_file)
+                          mean=self.state_mean,
+                          var=self.state_var)
 
+        return True
 
-    def create_initial_design(self, init_num, init_strategy='default'):
-        default_config = self.config_space.get_default_configuration()
-        num_random_config = init_num - 1
-        if init_strategy == 'random' or init_strategy == 'default':
-            initial_configs = self.sample_random_configs(self.init_num)
-            return initial_configs
-        elif init_strategy == 'random_explore_first':
-            candidate_configs = self.sample_random_configs(100)
-            return self.max_min_distance(default_config, candidate_configs, num_random_config)
-        elif init_strategy == 'sobol':
-            sobol = SobolSampler(self.config_space, num_random_config, random_state=self.rng)
-            initial_configs = [default_config] + sobol.generate(return_config=True)
-            return initial_configs
-        elif init_strategy == 'latin_hypercube':
-            lhs = LatinHypercubeSampler(self.config_space, num_random_config, criterion='maximin')
-            initial_configs = [default_config] + lhs.generate(return_config=True)
-            return initial_configs
-        else:
-            raise ValueError('Unknown initial design strategy: %s.' % init_strategy)
+    def gen_mean_var(self):
+        r = np.array(self.internal_metrics)
+        self.state_mean = r.mean(axis=0)
+        self.state_var = r.var(axis=0)
+
+        if self.mean_var_file == '':
+            self.mean_var_file = '{}_mean_var.pkl'.format(self.task_id)
+
+        with open(self.mean_var_file, 'wb') as f:
+            pickle.dump(self.state_mean, f)
+            pickle.dump(self.state_var, f)
 
     def get_suggestion(self, history_container=None):
-        if self.init_step < self.init_num:
-            return self.initial_configurations[self.init_step]
+        if self.model is None:
+            init_config = self.initial_configurations[self.init_step]
+            self.init_step += 1
+            return init_config
 
-        if self.need_init:
+        if self.episode_init:
             self.t = 0
             self.score = 0
             action = self.config_space.get_default_configuration().get_array()
@@ -110,7 +114,7 @@ class DDPG_Optimizer():
             for key in keys:
                 if type(self.config_space.get_hyperparameters_dict()[key]) == CategoricalHyperparameter:
                     action[keys.index(key)] = action[keys.index(key)] / (
-                                self.config_space.get_hyperparameters_dict()[key].num_choices - 1)
+                            self.config_space.get_hyperparameters_dict()[key].num_choices - 1)
             self.action = action
             return self.config_space.get_default_configuration()
 
@@ -129,40 +133,37 @@ class DDPG_Optimizer():
 
         return Configuration(self.config_space, vector=X_next.reshape(-1, 1))
 
-    def get_history(self):
-        return self.history_container
-
-    def update_observation(self, observation: Observation):
-
-        if self.init_step < self.init_num:
-            self.history_container.update_observation(observation)
-            self.init_step += 1
+    def update(self, observation: Observation):
+        if self.model is None:
+            self.internal_metrics.append(observation.IM)
+            if len(self.internal_metrics) >= self.init_num:
+                self.gen_mean_var()
+                self.create_model()
+                self.logger.info('Iteration {} create model'.format(self.init_step))
             return
 
-        if self.need_init:
+        if self.episode_init:
             self.state = observation.IM
             self.default_external_metrics = observation.objs[0]
+            self.last_external_metrics = observation.objs[0]
 
-            self.need_init = False
+            self.episode_init = False
             self.episode += 1
             self.t = 0
             self.logger.info('New Episode-%d, initialize' % (self.episode))
-
             return
 
-        self.history_container.update_observation(observation)
+        reward = self.get_reward(observation.objs[0])
         self.last_external_metrics = observation.objs[0]
-        reward = self.get_reward(self.last_external_metrics)
         next_state = observation.IM
         self.t += 1
         self.global_t += 1
-        # self.logger.info('In episode-%d, iter-%d' % (self.episode, self.t))
 
         done = False
         if self.t >= 100:
             done = True
         if done or self.score < -50:
-            self.need_init = True
+            self.episode_init = True
 
         self.model.add_sample(self.state, self.action, reward, next_state, done)
         self.state = next_state
@@ -177,12 +178,7 @@ class DDPG_Optimizer():
             self.model.save_model('model_params', title='{}_{}'.format(self.task_id, self.global_t))
             self.logger.info('Save model_params to %s_%s' % (self.task_id, self.global_t))
 
-
     def get_reward(self, external_metrics):
-        """Get the reward that is used in reinforcement learning algorithm.
-
-        The reward is calculated by tps and rt that are external metrics.
-        """
 
         def calculate_reward(delta0, deltat):
             if delta0 > 0:
@@ -205,21 +201,30 @@ class DDPG_Optimizer():
 
         return reward
 
-    def sample_random_configs(self, num_configs=1, history_container=None, excluded_configs=None):
-        """
-        Sample a batch of random configurations.
-        Parameters
-        ----------
-        num_configs
+    def create_initial_design(self, init_strategy='default', excluded_configs=None):
+        default_config = self.config_space.get_default_configuration()
+        num_random_config = self.init_num - 1
+        if init_strategy == 'random':
+            initial_configs = self.sample_random_configs(self.init_num, excluded_configs)
+            return initial_configs
+        elif init_strategy == 'default':
+            initial_configs = [default_config] + self.sample_random_configs(num_random_config, excluded_configs)
+            return initial_configs
+        elif init_strategy == 'random_explore_first':
+            candidate_configs = self.sample_random_configs(100, excluded_configs)
+            return self.max_min_distance(default_config, candidate_configs, num_random_config)
+        elif init_strategy == 'sobol':
+            sobol = SobolSampler(self.config_space, num_random_config, random_state=self.rng)
+            initial_configs = [default_config] + sobol.generate(return_config=True)
+            return initial_configs
+        elif init_strategy == 'latin_hypercube':
+            lhs = LatinHypercubeSampler(self.config_space, num_random_config, criterion='maximin')
+            initial_configs = [default_config] + lhs.generate(return_config=True)
+            return initial_configs
+        else:
+            raise ValueError('Unknown initial design strategy: %s.' % init_strategy)
 
-        history_container
-
-        Returns
-        -------
-
-        """
-        if history_container is None:
-            history_container = self.history_container
+    def sample_random_configs(self, num_configs=1, excluded_configs=None):
         if excluded_configs is None:
             excluded_configs = set()
 
@@ -229,7 +234,7 @@ class DDPG_Optimizer():
         while len(configs) < num_configs:
             config = self.config_space.sample_configuration()
             sample_cnt += 1
-            if config not in (history_container.configurations + configs) and config not in excluded_configs:
+            if config not in configs and config not in excluded_configs:
                 configs.append(config)
                 sample_cnt = 0
                 continue
@@ -261,7 +266,3 @@ class DDPG_Optimizer():
                 min_dis[j] = min(updated_dis, min_dis[j])
 
         return initial_configs
-
-    def alter_config_space(self, new_config_space):
-        self.config_space = new_config_space
-        self.history_container.alter_configuration_space(new_config_space)

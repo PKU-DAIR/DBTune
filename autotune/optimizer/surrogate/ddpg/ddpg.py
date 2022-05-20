@@ -183,7 +183,7 @@ class Critic(nn.Module):
 
 class DDPG(object):
 
-    def __init__(self, n_states, n_actions, opt, ouprocess=True, mean_var_path=None, supervised=False, debug=False):
+    def __init__(self, n_states, n_actions, opt, mean=None, var=None, ouprocess=True, supervised=False, debug=False):
         """ DDPG Algorithms
         Args:
             n_states: int, dimension of states
@@ -205,16 +205,10 @@ class DDPG(object):
         self.debug=debug
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        if mean_var_path is None:
+        if mean is None:
             mean = np.zeros(n_states)
+        if var is None:
             var = np.zeros(n_states)
-        elif not os.path.exists(mean_var_path):
-            mean = np.zeros(n_states)
-            var = np.zeros(n_states)
-        else:
-            with open(mean_var_path, 'rb') as f:
-                mean = pickle.load(f)
-                var = pickle.load(f)
 
         self.normalizer = Normalizer(mean, var)
 
