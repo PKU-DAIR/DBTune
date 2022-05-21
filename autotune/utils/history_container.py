@@ -272,18 +272,20 @@ class HistoryContainer(object):
 
             self.configurations.append(config)
             self.configurations_all.append(self.fill_default_value(config))
-            objs = self.get_objs(res, y_variables)
-            constraints = self.get_constraints(res, c_variables)
-            if self.num_objs == 1:
-                self.perfs.append(objs[0])
-            else:
-                self.perfs.append(objs)
             self.trial_states.append(trial_state)
-            self.constraint_perfs.append(constraints)
             self.elapsed_times.append(elapsed_time)
             self.internal_metrics.append(im)
             self.external_metrics.append(em)
             self.resource.append(resource)
+
+            objs = self.get_objs(res, y_variables)
+            if self.num_objs == 1:
+                self.perfs.append(objs[0])
+            else:
+                self.perfs.append(objs)
+
+            constraints = self.get_constraints(res, c_variables)
+            self.constraint_perfs.append(constraints)
 
             transform_perf = False
             failed = False
@@ -327,13 +329,16 @@ class HistoryContainer(object):
                 self.failed_index.append(cur_idx)
 
     def get_objs(self, res, y_variables):
-        objs = []
-        for y_variable in y_variables:
-            key = y_variable.strip().strip('-')
-            value = res[key]
-            if not y_variable.strip()[0] == '-':
-                value = - value
-            objs.append(value)
+        try:
+            objs = []
+            for y_variable in y_variables:
+                key = y_variable.strip().strip('-')
+                value = res[key]
+                if not y_variable.strip()[0] == '-':
+                    value = - value
+                objs.append(value)
+        except:
+            objs = [MAXINT] * self.num_objs
 
         return objs
 
@@ -341,11 +346,14 @@ class HistoryContainer(object):
         if len(constraints) == 0:
             return None
 
-        locals().update(res)
-        constraintL = []
-        for constraint in constraints:
-            value = eval(constraint)
-            constraintL.append(value)
+        try:
+            locals().update(res)
+            constraintL = []
+            for constraint in constraints:
+                value = eval(constraint)
+                constraintL.append(value)
+        except:
+            constraintL = []
 
         return constraintL
 

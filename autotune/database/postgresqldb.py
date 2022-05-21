@@ -31,11 +31,11 @@ class PostgresqlDB:
         self.pgcnf = args['cnf']
         self.pg_ctl = args['pg_ctl']
         self.pgdata = args['pgdata']
-        self.postgres = args['postgres']
+        self.postgres = os.path.join(os.path.split(os.path.abspath(self.pg_ctl))[0], 'postgres')
 
         # remote information
         self.remote_mode = eval(args['remote_mode'])
-        if self.remote_mode:
+        if self.remote_mode and self.remote_mode:
             self.ssh_user = args['ssh_user']
             self.ssh_pk_file = os.path.expanduser('~/.ssh/id_rsa')
             self.pk = paramiko.RSAKey.from_private_key_file(self.ssh_pk_file)
@@ -79,6 +79,8 @@ class PostgresqlDB:
         # PostgreSQL Knobs
         self.knobs_detail = initialize_knobs(args['knob_config_file'], int(args['knob_num']))
         self.default_knobs = get_default_knobs()
+
+        self.clear_cmd = """psql -c \"select pg_terminate_backend(pid) from pg_stat_activity where datname = 'imdbload';\" """
 
     def _gen_config_file(self, knobs):
         if self.remote_mode:
@@ -178,17 +180,18 @@ class PostgresqlDB:
                 if not ret_code:
                     logger.info('add {} to memory,cpuset:sever'.format(self.pid))
                 else:
-                    logger.info('Failed: add {} to memory,cpuset:sever'.format(self.pid))
+                    logger.info('Failed: add {} to memory,cpuset:sevtoer'.format(self.pid))
 
         else:
             proc = subprocess.Popen([self.postgres, '--config_file={}'.format(self.pgcnf)])
             self.pid = proc.pid
-            command = 'sudo cgclassify -g memory,cpuset:sever ' + str(self.pid)
-            p = os.system(command)
-            if not p:
-                logger.info('add {} to memory,cpuset:sever'.format(self.pid))
-            else:
-                logger.info('Failed: add {} to memory,cpuset:sever'.format(self.pid))
+            if self.isolation_mode:
+                command = 'sudo cgclassify -g memory,cpuset:sever ' + str(self.pid)
+                p = os.system(command)
+                if not p:
+                    logger.info('add {} to memory,cpuset:sever'.format(self.pid))
+                else:
+                    logger.info('Failed: add {} to memory,cpuset:sever'.format(self.pid))
 
         count = 0
         start_sucess = True

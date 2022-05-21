@@ -17,7 +17,7 @@ src_data_path = os.environ.get("DATASRC")
 log_num_default = 2
 log_size_default = 50331648
 
-RESTART_WAIT_TIME = 20
+RESTART_WAIT_TIME = 5
 TIMEOUT_CLOSE = 60
 
 class MysqlDB:
@@ -44,7 +44,7 @@ class MysqlDB:
 
         # resource isolation information
         self.isolation_mode = eval(args['isolation_mode'])
-        if self.isolation_mode:
+        if self.isolation_mode and self.remote_mode:
             self.ssh_passwd = getpass(prompt='Password on host for cgroups commands: ')
 
         # MySQL Internal Metrics
@@ -62,6 +62,8 @@ class MysqlDB:
         self.knobs_detail = initialize_knobs(args['knob_config_file'], int(args['knob_num']))
         self.default_knobs = get_default_knobs()
         self.pre_combine_log_file_size = log_num_default * log_size_default
+
+        self.clear_cmd = """mysqladmin processlist -uroot -S$MYSQL_SOCK | awk '$2 ~ /^[0-9]/ {print "KILL "$2";"}' | mysql -uroot -S$MYSQL_SOCK """
 
     def _gen_config_file(self, knobs):
         if self.remote_mode:
@@ -168,12 +170,13 @@ class MysqlDB:
         else:
             proc = subprocess.Popen([self.mysqld, '--defaults-file={}'.format(self.mycnf)])
             self.pid = proc.pid
-            command = 'sudo cgclassify -g memory,cpuset:sever ' + str(self.pid)
-            p = os.system(command)
-            if not p:
-                logger.info('add {} to memory,cpuset:sever'.format(self.pid))
-            else:
-                logger.info('Failed: add {} to memory,cpuset:sever'.format(self.pid))
+            if self.isolation_mode:
+                command = 'sudo cgclassify -g memory,cpuset:sever ' + str(self.pid)
+                p = os.system(command)
+                if not p:
+                    logger.info('add {} to memory,cpuset:sever'.format(self.pid))
+                else:
+                    logger.info('Failed: add {} to memory,cpuset:sever'.format(self.pid))
 
         count = 0
         start_sucess = True
@@ -290,7 +293,6 @@ class MysqlDB:
         except:
             sucess = False
 
-        print("[{}] Knobs applied, db restart!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
         return sucess
 
     def _check_apply(self, db_conn, k, v0):

@@ -243,16 +243,10 @@ class PipleLine(BOBase):
         trial_state = SUCCESS
         start_time = time.time()
 
-        try:
-            objs, constraints, em, resource, im, info, timeout = self.objective_function(config)
-            if timeout:
-                trial_state = TIMEOUT
-        except Exception as e:
-            self.logger.warning('Exception when calling objective function: %s' % str(e))
-            trial_state = FAILED
+        objs, constraints, em, resource, im, info, trial_state = self.objective_function(config)
+
+        if trial_state == FAILED:
             objs = self.FAILED_PERF
-            constraints = None
-            em, resource, im, info = None, None, None, None
 
         elapsed_time = time.time() - start_time
 
