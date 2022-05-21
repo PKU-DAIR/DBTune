@@ -113,7 +113,7 @@ def parse_sysbench(file_path):
         return[-1, -1, -1, -1, -1, -1]
 
 
-def parse_job(file_path, select_file):
+def parse_job(file_path, select_file, timeout=4):
     with open(file_path) as f:
         lines = f.readlines()
 
@@ -128,14 +128,16 @@ def parse_job(file_path, select_file):
         tmp = line.split('\t')[-1].strip()
         latL.append(float(tmp)/1000)
 
-    tpm = len(latL) / TIMEOUT
     for i in range(0, num_sql - len(lines[1:])):
-        latL.append(TIMEOUT * 60)
+        latL.append(timeout * 60)
+
     lat = np.percentile(latL, 95)
+    total_time = min(timeout, np.max(latL))
+    tps = len(latL) * 60. / total_time
 
     lat_var = statistics.variance(latL)
 
-    return [tpm, lat, tpm, -1, lat_var, -1]
+    return [tps, lat, tps, -1, lat_var, -1]
 
 def parse_cloudbench(file_path):
     f = open(file_path)
