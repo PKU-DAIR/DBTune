@@ -24,18 +24,18 @@ Observation = collections.namedtuple(
 class HistoryContainer(object):
     def __init__(self, task_id, num_constraints=0, config_space=None):
         self.task_id = task_id
-        self.info = None
-        self.config_space = config_space  # for show_importance
-        self.config_space_all = config_space
-        self.data = collections.OrderedDict()  # only successful data
-        self.data_all = collections.OrderedDict()
-        self.config_counter = 0
-        self.incumbent_value = MAXINT
-        self.incumbents = list()
-        self.logger = get_logger(self.__class__.__name__)
-
         self.num_objs = 1
         self.num_constraints = num_constraints
+        self.config_space = config_space  # for show_importance
+        self.config_space_all = config_space
+        self.logger = get_logger(self.__class__.__name__)
+
+        self.info = None
+        self.config_counter = 0
+        self.data = collections.OrderedDict()  # only successful data
+        self.data_all = collections.OrderedDict()
+        self.incumbent_value = MAXINT
+        self.incumbents = list()
         self.configurations = list()  # all configurations (include successful and failed)
         self.configurations_all = list()
         self.perfs = list()  # all perfs
@@ -84,9 +84,15 @@ class HistoryContainer(object):
 
         if not self.info:
             self.info = info
+
+        assert self.info == info
+
         self.configurations.append(config)
         self.configurations_all.append((self.fill_default_value(config)))
-        self.perfs.append(objs[0])
+        if self.num_objs == 1:
+            self.perfs.append(objs[0])
+        else:
+            self.perfs.append(objs)
         self.trial_states.append(trial_state)
         self.constraint_perfs.append(constraints)  # None if no constraint
         self.elapsed_times.append(elapsed_time)
@@ -108,9 +114,15 @@ class HistoryContainer(object):
                     transform_perf = True
                     feasible = False
 
-                self.successful_perfs.append(objs[0])
+                if self.num_objs == 1:
+                    self.successful_perfs.append(objs[0])
+                else:
+                    self.successful_perfs.append(objs)
                 if feasible:
-                    self.add(config, objs[0])
+                    if self.num_objs == 1:
+                        self.add(config, objs[0])
+                    else:
+                        self.add(config, objs)
                 else:
                     self.add(config, MAXINT)
 
@@ -229,10 +241,13 @@ class HistoryContainer(object):
         info = all_data["info"]
         data = all_data["data"]
 
-        y_variable = info['objs'][0]
+        y_variables = info['objs']
         c_variables = info['constraints']
         self.num_constraints = len(c_variables)
         self.info = info
+
+        assert len(self.info['objs']) == self.num_objs
+        assert len(self.info['constraints']) == self.num_constraints
 
         knobs_source = data[0]['configuration'].keys()
         knobs_target = self.config_space.get_hyperparameter_names()
@@ -253,17 +268,17 @@ class HistoryContainer(object):
             resource = tmp['resource']
             trial_state = tmp['trial_state']
             elapsed_time = tmp['elapsed_time']
+            res = dict(em, **resource)
 
             self.configurations.append(config)
             self.configurations_all.append(self.fill_default_value(config))
-            self.perfs.append(em[y_variable])
+            objs = self.get_objs(res, y_variables)
+            constraints = self.get_constraints(res, c_variables)
+            if self.num_objs == 1:
+                self.perfs.append(objs[0])
+            else:
+                self.perfs.append(objs)
             self.trial_states.append(trial_state)
-            constraints = []
-            for c in c_variables:
-                if c in em.keys():
-                    constraints.append(em[c])
-                else:
-                    constraints.append(resource[c])
             self.constraint_perfs.append(constraints)
             self.elapsed_times.append(elapsed_time)
             self.internal_metrics.append(im)
@@ -272,7 +287,7 @@ class HistoryContainer(object):
 
             transform_perf = False
             failed = False
-            if trial_state == SUCCESS and em[y_variable] < MAXINT:
+            if trial_state == SUCCESS and all(perf < MAXINT for perf in objs):
                 if self.num_constraints > 0 and constraints is None:
                     self.logger.error('Constraint is None in a SUCCESS trial!')
                     failed = True
@@ -284,9 +299,15 @@ class HistoryContainer(object):
                         transform_perf = True
                         feasible = False
 
-                    self.successful_perfs.append(em[y_variable])
+                    if self.num_objs == 1:
+                        self.successful_perfs.append(objs[0])
+                    else:
+                        self.successful_perfs.append(objs)
                     if feasible:
-                        self.add(config, em[y_variable])
+                        if self.num_objs == 1:
+                            self.add(config, objs[0])
+                        else:
+                            self.add(config, objs)
                     else:
                         self.add(config, MAXINT)
 
@@ -304,6 +325,29 @@ class HistoryContainer(object):
                 self.transform_perf_index.append(cur_idx)
             if failed:
                 self.failed_index.append(cur_idx)
+
+    def get_objs(self, res, y_variables):
+        objs = []
+        for y_variable in y_variables:
+            key = y_variable.strip().strip('-')
+            value = res[key]
+            if not y_variable.strip()[0] == '-':
+                value = - value
+            objs.append(value)
+
+        return objs
+
+    def get_constraints(self, res, constraints):
+        if len(constraints) == 0:
+            return None
+
+        locals().update(res)
+        constraintL = []
+        for constraint in constraints:
+            value = eval(constraint)
+            constraintL.append(value)
+
+        return constraintL
 
     def alter_configuration_space(self, new_sapce: ConfigurationSpace):
         configurations = []
@@ -387,51 +431,6 @@ class HistoryContainer(object):
         return self.get_str()
 
     __repr__ = __str__
-
-    def plot_convergence(
-            self,
-            xlabel="Number of iterations $n$",
-            ylabel=r"Min objective value after $n$ iterations",
-            ax=None, name=None, alpha=0.2, yscale=None,
-            color=None, true_minimum=None,
-            **kwargs):
-        """Plot one or several convergence traces.
-
-        Parameters
-        ----------
-        args[i] :  `OptimizeResult`, list of `OptimizeResult`, or tuple
-            The result(s) for which to plot the convergence trace.
-
-            - if `OptimizeResult`, then draw the corresponding single trace;
-            - if list of `OptimizeResult`, then draw the corresponding convergence
-              traces in transparency, along with the average convergence trace;
-            - if tuple, then `args[i][0]` should be a string label and `args[i][1]`
-              an `OptimizeResult` or a list of `OptimizeResult`.
-
-        ax : `Axes`, optional
-            The matplotlib axes on which to draw the plot, or `None` to create
-            a new one.
-
-        true_minimum : float, optional
-            The true minimum value of the function, if known.
-
-        yscale : None or string, optional
-            The scale for the y-axis.
-
-        Returns
-        -------
-        ax : `Axes`
-            The matplotlib axes.
-        """
-        losses = list(self.perfs)
-
-        n_calls = len(losses)
-        iterations = range(1, n_calls + 1)
-        mins = [np.min(losses[:i]) for i in iterations]
-        max_mins = max(mins)
-        cliped_losses = np.clip(losses, None, max_mins)
-        return plot_convergence(iterations, mins, cliped_losses, xlabel, ylabel, ax, name, alpha, yscale, color,
-                                true_minimum, **kwargs)
 
     def visualize_jupyter(self):
         try:
@@ -540,6 +539,51 @@ class HistoryContainer(object):
         table_data = [["Parameters", "Importance"]] + importance_list
         importance_table = AsciiTable(table_data).table
         return importance_table
+
+    def plot_convergence(
+            self,
+            xlabel="Number of iterations $n$",
+            ylabel=r"Min objective value after $n$ iterations",
+            ax=None, name=None, alpha=0.2, yscale=None,
+            color=None, true_minimum=None,
+            **kwargs):
+        """Plot one or several convergence traces.
+
+        Parameters
+        ----------
+        args[i] :  `OptimizeResult`, list of `OptimizeResult`, or tuple
+            The result(s) for which to plot the convergence trace.
+
+            - if `OptimizeResult`, then draw the corresponding single trace;
+            - if list of `OptimizeResult`, then draw the corresponding convergence
+              traces in transparency, along with the average convergence trace;
+            - if tuple, then `args[i][0]` should be a string label and `args[i][1]`
+              an `OptimizeResult` or a list of `OptimizeResult`.
+
+        ax : `Axes`, optional
+            The matplotlib axes on which to draw the plot, or `None` to create
+            a new one.
+
+        true_minimum : float, optional
+            The true minimum value of the function, if known.
+
+        yscale : None or string, optional
+            The scale for the y-axis.
+
+        Returns
+        -------
+        ax : `Axes`
+            The matplotlib axes.
+        """
+        losses = list(self.perfs)
+
+        n_calls = len(losses)
+        iterations = range(1, n_calls + 1)
+        mins = [np.min(losses[:i]) for i in iterations]
+        max_mins = max(mins)
+        cliped_losses = np.clip(losses, None, max_mins)
+        return plot_convergence(iterations, mins, cliped_losses, xlabel, ylabel, ax, name, alpha, yscale, color,
+                                true_minimum, **kwargs)
 
 
 class MOHistoryContainer(HistoryContainer):
