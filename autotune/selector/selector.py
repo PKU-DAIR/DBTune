@@ -1,151 +1,243 @@
-import abc
 import shap
+import math
 import numpy as np
+import pandas as pd
+from abc import ABC, abstractmethod
 from lightgbm import LGBMRegressor
-from sklearn import preprocessing
+from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import lasso_path
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
 from autotune.utils.fanova import fANOVA
 from autotune.utils.config_space import ConfigurationSpace
 from autotune.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.logging_utils import get_logger
 from ConfigSpace import CategoricalHyperparameter, OrdinalHyperparameter, Constant
 import pdb
 
-class KnobSelector(object, metaclass=abc.ABCMeta):
+
+class KnobSelector(ABC):
     def __init__(self):
-        pass
+        self.logger = get_logger(self.__class__.__name__)
 
-    def knob_selection_toy(self, config_space):
-        hps = config_space.get_hyperparameters()
-        cs_new = ConfigurationSpace()
-        for i in range(int(len(hps)-2)):
-            cs_new.add_hyperparameters([hps[i]])
-        return cs_new, True
-
+    @abstractmethod
     def knob_selection(self, config_space, history_container, num_hps):
         pass
 
 
 class SHAPSelector(KnobSelector):
-    def knob_selection(self, config_space, history_container, num_hps):
-        X = convert_configurations_to_array(history_container.configurations_all)
-        Y = np.array(history_container.get_transformed_perfs())
 
-        # Fit a LightGBMRegressor with observations
-        lgbr = LGBMRegressor()
-        lgbr.fit(X, Y)
-        explainer = shap.TreeExplainer(lgbr)
-        shap_values = explainer.shap_values(X)
-        feature_importance = np.mean(np.abs(shap_values), axis=0)
+    def knob_selection(self, config_space, history_container, num_hps, prediction=True):
 
-        hps = config_space.get_hyperparameters()
-        keys = [hp.name for hp in hps]
-        importance_list = []
-        for i, hp_name in enumerate(keys):
-            importance_list.append([hp_name, feature_importance[i]])
-        importance_list.sort(key=lambda x: x[1], reverse=True)
+        columns = history_container.config_space_all.get_hyperparameter_names()
 
+        X_df = pd.DataFrame(history_container.configurations_all)
+        X_df = X_df[columns]
+
+        X_default_df = pd.DataFrame([history_container.config_space_all.get_default_configuration(), ])
+        X_default_df = X_default_df[columns]
+
+        le = LabelEncoder()
+        for col in list(X_df.columns):
+            if isinstance(history_container.config_space_all[col], CategoricalHyperparameter):
+                le.fit(X_df[col])
+                X_df[col] = le.transform(X_df[col])
+                X_default_df[col] = le.transform(X_default_df[col])
+            else:
+                X_df[col] = X_df[col].astype('float')
+
+        Y = np.array(history_container.get_transformed_perfs()).astype('float')
+        Y = (Y - Y.mean()) / Y.std()
+
+        if prediction:
+            X_train, X_test, Y_train, Y_test = train_test_split(X_df, Y, test_size=0.05, random_state=0)
+            model = LGBMRegressor()
+            model.fit(X_train, Y_train)
+            output = model.predict(X_test)
+            error = np.sqrt(mean_squared_error(Y_test, output))
+            r2_test = r2_score(Y_test, output)
+            self.logger.info('The rmse of prediction of test set is: {:.2f}, {:.2%} of average tps, R2: {:.2%}'.format(
+                error, error / Y_test.mean(), r2_test))
+
+        model = LGBMRegressor()
+        model.fit(X_df, Y)
+
+        df = pd.DataFrame(history_container.configurations_all)
+        df = df[columns]
+        df['objs'] = np.array(history_container.get_transformed_perfs())
+
+        idx = df[df['objs'] < df['objs'].quantile(0.1)].index.tolist()
+        explainerModel = shap.TreeExplainer(model)
+        shap_values = explainerModel.shap_values(np.array(X_df.loc[idx, :]))
+        shap_value_default = explainerModel.shap_values(np.array(X_default_df))[-1]
+        knobs_shap = np.sum(shap_values - shap_value_default, axis=0)
+
+        importance = {}
+        for i in range(len(knobs_shap)):
+            knob = columns[i]
+            importance[knob] = knobs_shap[i]
+
+        a = sorted(importance.items(), key=lambda x: x[1], reverse=True)
+        rank = [a[i][0] for i in range(num_hps)]
+
+        hps = config_space.get_hyperparameters_dict()
         cs_new = ConfigurationSpace()
+
         for i in range(num_hps):
-            hp_index = config_space.get_idx_by_hyperparameter_name(importance_list[i][0])
-            cs_new.add_hyperparameter(hps[hp_index])
-        return cs_new
+            self.logger.info("Top{}: {}, its shap value is {:.4%}".format(i + 1, a[i][0], a[i][1]))
+            knob = a[i][0]
+            cs_new.add_hyperparameter(hps[knob])
+
+        return cs_new, rank
 
 
 class fANOVASelector(KnobSelector):
+
     def knob_selection(self, config_space, history_container, num_hps):
-        X_from_dict = np.array([list(config.get_dictionary().values())
-                                for config in history_container.configurations_all])
-        X_from_array = np.array([config.get_array() for config in history_container.configurations])
-        discrete_types = (CategoricalHyperparameter, OrdinalHyperparameter, Constant)
-        discrete_idx = [isinstance(hp, discrete_types) for hp in config_space.get_hyperparameters()]
-        X = X_from_dict.copy()
-        X[:, discrete_idx] = X_from_array[:, discrete_idx]
-        Y = np.array(history_container.get_transformed_perfs())
+
+        columns = history_container.config_space_all.get_hyperparameter_names()
+        X = pd.DataFrame(history_container.configurations_all)
+        X = X[columns]
+
+        le = LabelEncoder()
+        for col in list(X.columns):
+            if isinstance(history_container.config_space_all[col], CategoricalHyperparameter):
+                le.fit(X[col])
+                X[col] = le.transform(X[col])
+            else:
+                X[col] = X[col].astype('float')
+
+        Y = np.array(history_container.get_transformed_perfs()).astype('float')
+
         f = fANOVA(X=X, Y=Y, config_space=config_space)
 
-        # marginal for first parameter
-        hps = config_space.get_hyperparameters()
-        keys = [hp.name for hp in hps]
-        importance_list = list()
-        for key in keys:
-            p_list = (key,)
-            res = f.quantify_importance(p_list)
-            individual_importance = res[(key,)]['individual importance']
-            importance_list.append([key, individual_importance])
-        importance_list.sort(key=lambda x: x[1], reverse=True)
+        importance = {}
+        for i in list(X.columns):
+            value = f.quantify_importance((i,))[(i,)]['individual importance']
+            if not math.isnan(value):
+                importance[i] = value
 
+        a = sorted(importance.items(), key=lambda x: x[1], reverse=True)
+        rank = [a[i][0] for i in range(num_hps)]
+
+        hps = config_space.get_hyperparameters_dict()
         cs_new = ConfigurationSpace()
+
         for i in range(num_hps):
-            hp_index = config_space.get_idx_by_hyperparameter_name(importance_list[i][0])
-            cs_new.add_hyperparameter(hps[hp_index])
-        return cs_new
+            if a[i][1] != 0:
+                self.logger.info("Top{}: {}, its importance accounts for {:.4%}".format(i + 1, a[i][0], a[i][1]))
+                knob = a[i][0]
+                cs_new.add_hyperparameter(hps[knob])
+
+        return cs_new, rank
 
 
 class GiniSelector(KnobSelector):
-    def knob_selection(self, config_space, history_container, num_hps):
+
+    def knob_selection(self, config_space, history_container, num_hps, prediction=True):
+
+        columns = history_container.config_space_all.get_hyperparameter_names()
         X = convert_configurations_to_array(history_container.configurations_all)
         Y = np.array(history_container.get_transformed_perfs())
+
+        if prediction:
+            X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.05, random_state=0)
+            model = RandomForestRegressor()
+            model.fit(X_train, Y_train)
+            output = model.predict(X_test)
+            error = np.sqrt(mean_squared_error(Y_test, output))
+            r2_test = r2_score(Y_test, output)
+            self.logger.info('The rmse of prediction of test set is: {:.2f}, {:.2%} of average tps, R2: {:.2%}'.format(
+                error, error / Y_test.mean(), r2_test))
 
         model = RandomForestRegressor()
         model.fit(X, Y)
         feature_importance = model.feature_importances_
 
-        hps = config_space.get_hyperparameters()
-        keys = [hp.name for hp in hps]
-        importance_list = []
-        for i, hp_name in enumerate(keys):
-            importance_list.append([hp_name, feature_importance[i]])
-        importance_list.sort(key=lambda x: x[1], reverse=True)
+        importance = {}
+        for i in range(len(feature_importance)):
+            knob = columns[i]
+            importance[knob] = feature_importance[i]
 
+        a = sorted(importance.items(), key=lambda x: x[1], reverse=True)
+        rank = [a[i][0] for i in range(num_hps)]
+
+        hps = config_space.get_hyperparameters_dict()
         cs_new = ConfigurationSpace()
+
         for i in range(num_hps):
-            hp_index = config_space.get_idx_by_hyperparameter_name(importance_list[i][0])
-            cs_new.add_hyperparameter(hps[hp_index])
-        return cs_new
+            self.logger.info("Top{}: {}, its feature importance is {:.4%}".format(i + 1, a[i][0], a[i][1]))
+            knob = a[i][0]
+            cs_new.add_hyperparameter(hps[knob])
+
+        return cs_new, rank
 
 
 class AblationSelector(KnobSelector):
+
     def knob_selection(self, config_space, history_container, num_hps):
-        X = convert_configurations_to_array(history_container.configurations_all)
-        Y = np.array(history_container.get_transformed_perfs())
 
-        default = []
-        name = []
-        for hp in config_space.get_hyperparameters():
-            default.append(hp.normalized_default_value)
-            name.append(hp.name)
+        columns = history_container.config_space_all.get_hyperparameter_names()
 
+        X_df = pd.DataFrame(history_container.configurations_all)
+        X_df = X_df[columns]
+
+        X_default_df = pd.DataFrame([history_container.config_space_all.get_default_configuration(), ])
+        X_default_df = X_default_df[columns]
+
+        le = LabelEncoder()
+        for col in list(X_df.columns):
+            if isinstance(history_container.config_space_all[col], CategoricalHyperparameter):
+                le.fit(X_df[col])
+                X_df[col] = le.transform(X_df[col])
+                X_default_df[col] = le.transform(X_default_df[col])
+            else:
+                X_df[col] = X_df[col].astype('float')
+
+        Y = np.array(history_container.get_transformed_perfs()).astype('float')
         model = RandomForestRegressor()
-        model.fit(X, Y)
+        model.fit(X_df.to_numpy(), Y)
 
-        q = np.quantile(Y, 0.9)
-        id_list = np.argwhere(Y > q)
-        top_knobs = {}
-        for id in id_list:
-            path = self.generate_path(X[id], default, model, name)
-            knob_path = [name[i] for i in path]
+        df = pd.DataFrame(history_container.configurations_all)
+        df = df[columns]
+        df['objs'] = np.array(history_container.get_transformed_perfs())
+        idx = df[df['objs'] < df['objs'].quantile(0.1)].index.tolist()
+
+        top_knobs = {k: 0 for k in columns}
+        for id in idx:
+            path = self.generate_path(
+                np.array(X_df.loc[id, :]).reshape(1, -1),
+                X_default_df.to_numpy().reshape(1, -1),
+                model,
+                int(num_hps/2)
+            )
+            knob_path = [columns[i] for i in path]
             for k in knob_path:
-                if k not in top_knobs.keys():
-                    top_knobs = 0
-                top_knobs[k] = top_knobs + 1
+                top_knobs[k] = top_knobs[k] + 1
 
-        importance_list = sorted(top_knobs.items(), key=lambda kv: (kv[1], kv[0]), reverse=True)
+        a = sorted(top_knobs.items(), key=lambda x: x[1], reverse=True)
+        rank = [a[i][0] for i in range(num_hps)]
+
+        hps = config_space.get_hyperparameters_dict()
         cs_new = ConfigurationSpace()
+
         for i in range(num_hps):
-            hp_index = config_space.get_idx_by_hyperparameter_name(importance_list[i][0])
-            cs_new.add_hyperparameter(hps[hp_index])
-        return cs_new
+            self.logger.info("Top{}: {}, it appears in ablation path {} times".format(i + 1, a[i][0], a[i][1]))
+            knob = a[i][0]
+            cs_new.add_hyperparameter(hps[knob])
 
+        return cs_new, rank
 
-    def generate_path(self, target, default, emp, knobsName):
-        y_target = emp.predict(target)[0]
-        y_default = emp.predict(default)[0]
-        print("y_target: {}, y_default: {}".format(y_target, y_default))
+    def generate_path(self, target, default, emp, top_num=10):
+        # y_target = emp.predict(target)[0]
+        # y_default = emp.predict(default)[0]
+        # self.logger.debug("y_target: {}, y_default: {}".format(y_target, y_default))
         x_path = default.copy()
         path = []
         path_i = 0
-        for j in range(0, 20):
+        # count top 20 in ablation path
+        for j in range(0, top_num):
             y_max = 0
             for i in range(0, default.shape[1]):
                 if i in path:
@@ -156,9 +248,9 @@ class AblationSelector(KnobSelector):
                 if y_tmp > y_max:
                     y_max = y_tmp
                     path_i = i
-            print("Top {}: {}, default value: {}, target value: {}, TPS: {}".format(j, knobsName[path_i],
-                                                                                    int(x_path[0][path_i]),
-                                                                                    int(target[0][path_i]), y_max))
+            # self.logger.debug("Top {}: {}, default value: {}, target value: {}, TPS: {}".format(j, knobsName[path_i],
+            #                                                                         int(x_path[0][path_i]),
+            #                                                                         int(target[0][path_i]), y_max))
             path.append(path_i)
             x_path[0][path_i] = target[0][path_i]
 
@@ -166,27 +258,40 @@ class AblationSelector(KnobSelector):
 
 
 class LASSOSelector(KnobSelector):
+
     def knob_selection(self, config_space, history_container, num_hps):
+
+        columns = history_container.config_space_all.get_hyperparameter_names()
         X = convert_configurations_to_array(history_container.configurations_all)
         Y = np.array(history_container.get_transformed_perfs())
         alphas, coefs, _ = lasso_path(X, Y)
 
-        feature_rankings = [[] for _ in range(X.shape[1])]
-        for target_coef_paths in coefs:
-            for i, feature_path in enumerate(target_coef_paths):
-                entrance_step = 1
-                for val_at_step in feature_path:
-                    if val_at_step == 0:
-                        entrance_step += 1
-                    else:
-                        break
-                feature_rankings[i].append(entrance_step)
-        rankings = np.array([np.mean(ranks) for ranks in feature_rankings])
-        rank_idxs = np.argsort(rankings)
+        feature_importance = []
+        for i, feature_path in enumerate(coefs):
+            entrance_step = 1
+            for val_at_step in feature_path:
+                if val_at_step == 0:
+                    entrance_step += 1
+                else:
+                    break
+            feature_importance.append(entrance_step)
 
-        hps = config_space.get_hyperparameters()
+        importance = {}
+        for i in range(len(feature_importance)):
+            knob = columns[i]
+            importance[knob] = feature_importance[i]
+
+        a = sorted(importance.items(), key=lambda x: x[1], reverse=True)
+        rank = [a[i][0] for i in range(num_hps)]
+
+        hps = config_space.get_hyperparameters_dict()
         cs_new = ConfigurationSpace()
+
         for i in range(num_hps):
-            hp_index = rank_idxs[i]
-            cs_new.add_hyperparameter(hps[hp_index])
-        return cs_new
+            self.logger.info("Top{}: {}, its entrance step on lasso path is {}".format(i + 1, a[i][0], a[i][1]))
+            knob = a[i][0]
+            cs_new.add_hyperparameter(hps[knob])
+
+        return cs_new, rank
+
+

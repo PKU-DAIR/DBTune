@@ -22,6 +22,7 @@ from autotune.pipleline.base import BOBase
 from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
 from autotune.utils.limit import time_limit, TimeoutException, no_time_limit_func
 from autotune.utils.util_funcs import get_result
+from autotune.utils.config_space import ConfigurationSpace
 from autotune.selector.selector import SHAPSelector, fANOVASelector, GiniSelector, AblationSelector, LASSOSelector
 from autotune.optimizer.surrogate.core import build_surrogate, surrogate_switch
 from autotune.optimizer.core import build_acq_func, build_optimizer
@@ -55,9 +56,9 @@ class PipleLine(BOBase):
                  random_state=None,
                  selector_type='shap',
                  incremental='decrease',
-                 incremental_step=4,
+                 incremental_every=4,
                  incremental_num=1,
-                 num_hps=5,
+                 num_hps_init=5,
                  num_metrics=65,
                  advisor_kwargs: dict = None,
                  **kwargs
@@ -76,10 +77,10 @@ class PipleLine(BOBase):
         self.selector_type = selector_type
         self.optimizer_type = optimizer_type
         self.config_space_all = config_space
-        self.incremental = incremental  # None, increase, decrease
-        self.incremental_step = incremental_step  # how often increment the number of knobs
+        self.incremental = incremental  # none, increase, decrease
+        self.incremental_every = incremental_every  # how often increment the number of knobs
         self.incremental_num = incremental_num  # how many knobs to increment each time
-        self.num_hps = num_hps  # initial number of knobs before incremental tuning
+        self.num_hps_init = num_hps_init
         self.num_hps_max = len(self.config_space_all.get_hyperparameters())
         self.num_metrics = num_metrics
         self.init_selector()
@@ -123,6 +124,7 @@ class PipleLine(BOBase):
                                            **advisor_kwargs)
         elif optimizer_type == 'GA':
             assert self.num_objs == 1 and num_constraints == 0
+            assert self.incremental == 'none'
 
             from autotune.optimizer.ga_optimizer import GA_Optimizer
             self.optimizer = GA_Optimizer(config_space,
@@ -135,6 +137,9 @@ class PipleLine(BOBase):
                                           **advisor_kwargs)
         elif optimizer_type == 'TurBO':
             # TODO: assertion? warm start?
+            assert self.num_objs == 1 and num_constraints == 0
+            assert self.incremental == 'none'
+
             from autotune.optimizer.turbo_optimizer import TURBO_Optimizer
             self.optimizer = TURBO_Optimizer(config_space,
                                              initial_trials=initial_runs,
@@ -142,11 +147,12 @@ class PipleLine(BOBase):
                                              **advisor_kwargs)
         elif optimizer_type == 'DDPG':
             assert self.num_objs == 1 and num_constraints == 0
+            assert self.incremental == 'none'
 
             from autotune.optimizer.ddpg_optimizer import DDPG_Optimizer
             self.optimizer = DDPG_Optimizer(config_space,
                                             self.history_container,
-                                            knobs_num=num_hps,
+                                            knobs_num=self.num_hps_init,
                                             metrics_num=num_metrics,
                                             task_id=task_id,
                                             params=kwargs['params'],
@@ -188,31 +194,59 @@ class PipleLine(BOBase):
         return self.get_history()
 
     def knob_selection(self):
+        assert self.num_objs == 1
+
         if self.iteration_id < self.init_num:
             return
-        elif self.iteration_id == self.init_num:
-            if self.num_hps == len(self.config_space.get_hyperparameter_names()):
+
+        if self.incremental == 'none':
+            if self.num_hps_init == len(self.config_space.get_hyperparameter_names()):
                 return
-            new_config_space = self.selector.knob_selection(
-                self.config_space_all, self.history_container, self.num_hps)
+
+            new_config_space, _ = self.selector.knob_selection(
+                self.config_space_all, self.history_container, self.num_hps_init)
+
             if not self.config_space == new_config_space:
                 logger.info("new configuration space: {}".format(new_config_space))
                 self.history_container.alter_configuration_space(new_config_space)
+                self.config_space = new_config_space
 
-        elif self.incremental \
-                and (self.iteration_id - self.init_num) % self.incremental_step == 0:
+        else:
+            # rank all knobs after init
+            if self.iteration_id == self.init_num:
+                _, self.knob_rank = self.selector.knob_selection(
+                    self.config_space_all, self.history_container, self.num_hps_max)
+
+            incremental_step = int((self.iteration_id - self.init_num)/self.incremental_every)
             if self.incremental == 'increase':
-                self.num_hps = min(self.num_hps + 1, self.num_hps_max)
+                num_hps = self.num_hps_init + incremental_step * self.incremental_every
+                num_hps = min(num_hps, self.num_hps_max)
+
+                new_config_space = ConfigurationSpace()
+                for knob in self.knob_rank[:num_hps]:
+                    new_config_space.add_hyperparameter(self.config_space_all[knob])
+
+                if not self.config_space == new_config_space:
+                    logger.info("new configuration space: {}".format(new_config_space))
+                    self.history_container.alter_configuration_space(new_config_space)
+                    self.config_space = new_config_space
+
             elif self.incremental == 'decrease':
-                self.num_hps = max(self.num_hps - 1, 1)
+                num_hps = self.num_hps_init - incremental_step * self.incremental_every
+                num_hps = max(num_hps, 1)
 
-            if self.num_hps == len(self.config_space.get_hyperparameter_names()):
-                return
+                new_config_space = ConfigurationSpace()
+                for knob in self.knob_rank[:num_hps]:
+                    new_config_space.add_hyperparameter(self.config_space_all[knob])
 
-            new_config_space = self.selector.knob_selection(self.config_space_all, self.history_container, self.num_hps)
-            if not self.config_space == new_config_space:
-                logger.info("new configuration space: {}".format(new_config_space))
-                self.history_container.alter_configuration_space(new_config_space)
+                # fix the knobs that no more to tune
+                inc_config = self.history_container.incumbents[0][0]
+                self.objective_function(inc_config)
+
+                if not self.config_space == new_config_space:
+                    logger.info("new configuration space: {}".format(new_config_space))
+                    self.history_container.alter_configuration_space(new_config_space)
+                    self.config_space = new_config_space
 
     def iterate(self):
         self.knob_selection()

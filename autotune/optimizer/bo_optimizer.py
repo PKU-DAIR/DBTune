@@ -1,6 +1,8 @@
 # License: MIT
 
 import abc
+import pdb
+
 import numpy as np
 from typing import List
 from collections import OrderedDict
@@ -58,8 +60,6 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         self.config_space.seed(self.config_space_seed)
         self.ref_point = ref_point
 
-        self.config_space_all = config_space
-
         # initial design
         if initial_configurations is not None and len(initial_configurations) > 0:
             self.initial_configurations = initial_configurations
@@ -75,7 +75,6 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         self.auto_alter_model = False
         self.algo_auto_selection()
         self.check_setup()
-        self.setup_bo_basics()
 
     def algo_auto_selection(self):
         from ConfigSpace import UniformFloatHyperparameter, UniformIntegerHyperparameter, \
@@ -153,7 +152,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                 if self.acq_optimizer_type == 'random_scipy':
                     self.acq_optimizer_type = 'local_random'
                     self.logger.info('n_observations=300, change acq optimizer from random_scipy to local_random!')
-                self.setup_bo_basics()
+                self.setup_bo_basics(history_container.config_space)
 
     def check_setup(self):
         """
@@ -203,35 +202,40 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
             if 'ehvi' in self.acq_type and self.ref_point is None:
                 raise ValueError('Must provide reference point to use EHVI method!')
 
-    def setup_bo_basics(self):
+    def setup_bo_basics(self, config_space: None):
         """
                 Prepare the basic BO components.
                 Returns
                 -------
                 An optimizer object.
                 """
+        if config_space is None:
+            config_space = self.config_space
+        else:
+            self.config_space = config_space
+
         if self.num_objs == 1 or self.acq_type == 'parego':
             self.surrogate_model = build_surrogate(func_str=self.surrogate_type,
-                                                   config_space=self.config_space,
+                                                   config_space=config_space,
                                                    rng=self.rng,
                                                    history_hpo_data=self.history_bo_data)
         else:  # multi-objectives
             self.surrogate_model = [build_surrogate(func_str=self.surrogate_type,
-                                                    config_space=self.config_space,
+                                                    config_space=config_space,
                                                     rng=self.rng,
                                                     history_hpo_data=self.history_bo_data)
                                     for _ in range(self.num_objs)]
 
         if self.num_constraints > 0:
             self.constraint_models = [build_surrogate(func_str=self.constraint_surrogate_type,
-                                                      config_space=self.config_space,
+                                                      config_space=config_space,
                                                       rng=self.rng) for _ in range(self.num_constraints)]
 
         if self.acq_type in ['mesmo', 'mesmoc', 'mesmoc2', 'usemo']:
             self.acquisition_function = build_acq_func(func_str=self.acq_type,
                                                        model=self.surrogate_model,
                                                        constraint_models=self.constraint_models,
-                                                       config_space=self.config_space)
+                                                       config_space=config_space)
         else:
             self.acquisition_function = build_acq_func(func_str=self.acq_type,
                                                        model=self.surrogate_model,
@@ -241,7 +245,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
             self.acq_optimizer_type = 'usemo_optimizer'
         self.optimizer = build_optimizer(func_str=self.acq_optimizer_type,
                                          acq_func=self.acquisition_function,
-                                         config_space=self.config_space,
+                                         config_space=config_space,
                                          rng=self.rng)
 
     def create_initial_design(self, init_strategy='default', excluded_configs=None):
@@ -291,6 +295,8 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         return initial_configs
 
     def get_surrogate(self, history_container: HistoryContainer):
+
+        self.setup_bo_basics(history_container.config_space)
 
         X = convert_configurations_to_array(history_container.configurations)
         Y = history_container.get_transformed_perfs()

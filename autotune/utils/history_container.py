@@ -141,7 +141,7 @@ class HistoryContainer(object):
         if failed:
             self.failed_index.append(cur_idx)
 
-    def add(self, config: Configuration, perf: Perf):
+    def add(self, config: Configuration, perf):
         if config in self.data:
             self.logger.warning('Repeated configuration detected!')
             return
@@ -215,7 +215,7 @@ class HistoryContainer(object):
         data = []
         for i in range(len(self.perfs)):
             tmp = {
-                'configuration': self.configurations[i].get_dictionary(),
+                'configuration': self.configurations_all[i].get_dictionary(),
                 'external_metrics': self.external_metrics[i],
                 'internal_metrics': self.internal_metrics[i],
                 'resource': self.resource[i],
@@ -357,34 +357,31 @@ class HistoryContainer(object):
 
         return constraintL
 
-    def alter_configuration_space(self, new_sapce: ConfigurationSpace):
+    def alter_configuration_space(self, new_space: ConfigurationSpace):
+        names = new_space.get_hyperparameter_names()
+        all_default_config_dict = self.config_space_all.get_default_configuration().get_dictionary()
+
         configurations = []
         data = collections.OrderedDict()
-        for c in  self.configurations_all:
-            values = {}
-            for key in new_sapce._hyperparameters:
-                if key in c.keys():
-                    values[key] = c[key]
-                else:
-                    values[key] = self.config_space_all._hyperparameters[key].default_value
 
-            c_new = Configuration(new_sapce, values)
+        for i in range(self.config_counter):
+            config = self.configurations_all[i]
+            config_new = {}
+            for name in names:
+                if name in config.get_dictionary().keys():
+                    config_new[name] = config[name]
+                else:
+                    config_new[name] = all_default_config_dict[name]
+
+            c_new = Configuration(new_space, config_new)
             configurations.append(c_new)
 
-        for c in list(self.data_all.keys()):
-            perf = self.data_all[c]
-            values = {}
-            for key in new_sapce._hyperparameters:
-                if key in c.keys():
-                    values[key] = c[key]
-                else:
-                    values[key] = self.config_space_all._hyperparameters[key].default_value
-            c_new = Configuration(new_sapce, values)
+            perf = self.data_all[config]
             data[c_new] = perf
-
 
         self.configurations = configurations
         self.data = data
+        self.config_space = new_space
 
     def get_str(self):
         from terminaltables import AsciiTable
