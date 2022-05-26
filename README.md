@@ -33,8 +33,6 @@ To install the newest DBTune package, just type the following scripts on the com
 DBTune currently supports three database benchmarks:  <a href="https://github.com/oltpbenchmark/oltpbench.git" target="_blank" rel="nofollow">OLTP\-Bench</a>,  <a href="https://github.com/akopytov/sysbench.git" target="_blank" rel="nofollow">SYSBENCH</a>  and <a href="https://github.com/winkyao/join-order-benchmark" target="_blank" rel="nofollow">JOB</a>. Please reffer to the <a href="https://github.com/Blairruc-pku/DBTuner/blob/main/workload_prepare.md" target="_blank" rel="nofollow">details instuction</a>  for preparing the workloads.
 
 ## Quick Start
-
-### Performance Tuning
 1. Edit the database informantion `config_performance.ini` in the script. 
 Take Tuning Mysql as an example.
  ```ini
@@ -51,16 +49,16 @@ passwd = 1234567
 # socket
 sock =  /data2/ruike/mysql/base/mysql.sock
 # db cnf file on clientDB host
-cnf = /data2/ruike/OnlineTune/template/experiment_normandy.cnf
+cnf = template/experiment_normandy.cnf
   ```
 2. Edit the knob and workload information in `config_performance.ini`.
 ```ini
 
 ####### DB knob related
 # knob config file
-knob_config_file =  experiment/gen_knobs/OLTP.json
+knob_config_file =  experiment/gen_knobs/OLTP_dynamic.json
 # number of tuning knobs (counting from the first)
-knob_num = 20
+knob_num = 50
 ####### Workload related
 # Database Name
 dbname = ycsb
@@ -73,6 +71,7 @@ oltpbench_config_xml = ~/oltpbench/config/sample_ycsb_config.xml
  
 3. Edit the tuning strategy in `config_performance.ini`.
 We use performance tuning (minimizing latency) as an example.
+By default, DBTune uses SHAP for knob selection, MBO for configuration optimizers. For detailed setting, please refer to .
 ```ini
 # task id
 task_id = dbtune_task1
