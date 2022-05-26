@@ -156,27 +156,27 @@ class MysqlDB:
             self.pid = int(start_stdout.readline())
 
             if self.isolation_mode:
-                cgroup_cmd = 'sudo -S cgclassify -g memory,cpuset:sever ' + str(self.pid)
+                cgroup_cmd = 'sudo -S cgclassify -g memory,cpuset:server ' + str(self.pid)
                 ssh_stdin, ssh_stdout, _ = ssh.exec_command(cgroup_cmd)
                 ssh_stdin.write(self.ssh_passwd + '\n')
                 ssh_stdin.flush()
                 ret_code = ssh_stdout.channel.recv_exit_status()
                 ssh.close()
                 if not ret_code:
-                    logger.info('add {} to memory,cpuset:sever'.format(self.pid))
+                    logger.info('add {} to memory,cpuset:server'.format(self.pid))
                 else:
-                    logger.info('Failed: add {} to memory,cpuset:sever'.format(self.pid))
+                    logger.info('Failed: add {} to memory,cpuset:server'.format(self.pid))
 
         else:
             proc = subprocess.Popen([self.mysqld, '--defaults-file={}'.format(self.mycnf)])
             self.pid = proc.pid
             if self.isolation_mode:
-                command = 'sudo cgclassify -g memory,cpuset:sever ' + str(self.pid)
+                command = 'sudo cgclassify -g memory,cpuset:server ' + str(self.pid)
                 p = os.system(command)
                 if not p:
-                    logger.info('add {} to memory,cpuset:sever'.format(self.pid))
+                    logger.info('add {} to memory,cpuset:server'.format(self.pid))
                 else:
-                    logger.info('Failed: add {} to memory,cpuset:sever'.format(self.pid))
+                    logger.info('Failed: add {} to memory,cpuset:server'.format(self.pid))
 
         count = 0
         start_sucess = True
