@@ -35,8 +35,53 @@ DBTune currently supports three database benchmarks:  <a href="https://github.co
 ## Quick Start
 
 ### Performance Tuning
-1. Edit the config_performance.ini in the script.
- ```
- 
+1. Edit the database informantion `config_performance.ini` in the script. 
+Take Tuning Mysql as an example.
+ ```ini
+ # db: [mysql, postgres]
+db = mysql
+# Host IP Address
+host = 11.160.41.15
+# Host Port Number
+port = 3306
+# Database User Name
+user = root
+# Database Password
+passwd = 1234567
+# socket
+sock =  /data2/ruike/mysql/base/mysql.sock
+# db cnf file on clientDB host
+cnf = /data2/ruike/OnlineTune/template/experiment_normandy.cnf
   ```
-3. 
+2. Edit the knob and workload information in `config_performance.ini`.
+```ini
+
+####### DB knob related
+# knob config file
+knob_config_file =  experiment/gen_knobs/OLTP.json
+# number of tuning knobs (counting from the first)
+knob_num = 20
+####### Workload related
+# Database Name
+dbname = ycsb
+# workload name [sysbench, tpcc, workload_zoo,  oltpbench_twitter, oltpbench_ycsb]
+workload = oltpbench_ycsb
+# oltpbenchmark config
+oltpbench_config_xml = ~/oltpbench/config/sample_ycsb_config.xml
+# thread_num
+```
+ 
+3. Edit the tuning strategy in `config_performance.ini`.
+We use performance tuning (minimizing latency) as an example.
+```ini
+# task id
+task_id = dbtune_task1
+# performance_metric: [tps, lat, qps, cpu, IO, readIO, writeIO, virtualMem, physical]
+# default maximization, '- 'minus means minimization
+performance_metric = ['-latency']
+```
+
+4. Conduct Tuning.
+```bash
+python optimize.py  --config=config_performance.ini
+```
