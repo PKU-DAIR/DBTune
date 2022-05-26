@@ -102,9 +102,9 @@ transfer_framework = rgpe
 data_repo = /logs/bo_history
 ```
 
-DBTune support 3 transfer framework:  workload_map, rgpe, finetune.
-It uses the data in '/logs/bo_history'  as source data for tansfer.
-Turn off Knowledge Transfer by setting transfer_framework=none.
+DBTune support 3 transfer frameworks:  workload_map, rgpe, finetune.
+It uses the data in `/logs/bo_history`  as source data for tansfer.
+Turn off Knowledge Transfer by setting "transfer_framework" = none.
 
 
 

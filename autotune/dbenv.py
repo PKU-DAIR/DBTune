@@ -119,6 +119,8 @@ class DBEnv:
             raise ValueError('Invalid workload nmae!')
 
     def get_external_metrics(self, filename=''):
+        if not os.path.exists(filename):
+            print("benchmark result file does not exist!")
         if self.workload['name'] == 'sysbench':
             result = parse_sysbench(filename)
         elif self.workload['name'] == 'oltpbench':
@@ -196,6 +198,8 @@ class DBEnv:
             ret_code = p_benchmark.poll()
             if ret_code == 0:
                 print("[{}] benchmark finished!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
+            else:
+                print("run benchmark get error {}".format(ret_code))
         except subprocess.TimeoutExpired:
             benchmark_timeout = True
             print("[{}] benchmark timeout!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
@@ -226,6 +230,7 @@ class DBEnv:
                 cpu, avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory = rm.get_monitor_data_avg()
         else:
             cpu, avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory = 0, 0, 0, 0, 0
+
 
         external_metrics = self.get_external_metrics(filename)
         internal_metrics, dirty_pages, hit_ratio, page_data = self.db._post_handle(internal_metrics)

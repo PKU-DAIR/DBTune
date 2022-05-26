@@ -279,7 +279,7 @@ class PipleLine(BOBase):
 
         objs, constraints, em, resource, im, info, trial_state = self.objective_function(config)
 
-        if trial_state == FAILED:
+        if trial_state == FAILED or trial_state == TIMEOUT:
             objs = self.FAILED_PERF
 
         elapsed_time = time.time() - start_time
