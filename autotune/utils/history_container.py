@@ -1,4 +1,5 @@
 # License: MIT
+import os
 import pdb
 import sys
 import time
@@ -19,6 +20,33 @@ Perf = collections.namedtuple(
 
 Observation = collections.namedtuple(
     'Observation', ['config', 'trial_state', 'constraints', 'objs', 'elapsed_time', 'EM', 'IM', 'resource', 'info'])
+
+
+def detect_valid_history_file(dir):
+    if not os.path.exists(dir):
+        return []
+    files = os.listdir(dir)
+    valid_files = []
+    for f in files:
+        try:
+            with open(fn) as fp:
+                all_data = json.load(fp)
+        except Exception as e:
+            continue
+        data = all_data['data']
+        valid_count = 0
+        for item in data:
+            if item['trial_state'] == 0:
+                valid_count = valid_count + 1
+            if valid_count > len(data)/2:
+                valid_files.append(files)
+                continue
+    return valid_files
+
+
+
+
+
 
 
 class HistoryContainer(object):

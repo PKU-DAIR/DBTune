@@ -102,15 +102,15 @@ class DBTuner:
                        num_objs=len(self.objs),
                        num_constraints=len(self.constraints),
                        optimizer_type=self.method,
-                       max_runs=eval(self.args_tune['max_runs']),
+                       max_runs=int(self.args_tune['max_runs']),
                        surrogate_type=self.surrogate_type,
                        history_bo_data=self.hcL,
                        acq_optimizer_type='local_random',  # 'random_scipy',#
                        selector_type=self.args_tune['selector_type'],
-                       initial_runs=eval(self.args_tune['initial_runs']),
+                       initial_runs=int(self.args_tune['initial_runs']),
                        incremental=self.args_tune['incremental'],
-                       incremental_every=eval(self.args_tune['incremental_every']),
-                       incremental_num=eval(self.args_tune['incremental_num']),
+                       incremental_every=int(self.args_tune['incremental_every']),
+                       incremental_num=int(self.args_tune['incremental_num']),
                        init_strategy='random_explore_first',
                        ref_point= self.env.reference_point,
                        task_id=self.args_tune['task_id'],
@@ -118,7 +118,7 @@ class DBTuner:
                        num_hps_init=int(self.args_tune['initial_tunable_knob_num']),
                        num_metrics=self.env.db.num_metrics,
                        mean_var_file=self.args_tune['mean_var_file'],
-                       batch_size=eval(self.args_tune['batch_size']),
+                       batch_size=int(self.args_tune['batch_size']),
                        params=self.model_params_path,
                        )
 
