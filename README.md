@@ -1,18 +1,18 @@
 # DBTune: Customized and Efficient Database Tuning System
 
-**DBTune** is a customized and efficient database tuning system that can automatically find good configuration knobs for a database system. It support multiple tuning applications, including performance tuning, resource-oriented tuning or multiple-objective tuning defined by the users. DBTune is equipped with the start-of-the-art algorithms for tuning a database. It allows users to easily tune the database knobs without the pain of manually replaying the workloads and collecting the performance metrics of a database. DBTune is designed and developed by the database team from the <a href="https://cuibinpku.github.io/index.html" target="_blank" rel="nofollow">DAIR Lab</a> at Peking University.
+**DBTune** is a customized and efficient database tuning system that can automatically find good configuration knobs for a database system. It supports multiple tuning scenarios, including performance tuning, resource-oriented tuning or multiple-objective tuning defined by the users. DBTune is equipped with state-of-the-art techniques for tuning a database. DBTune is designed and developed by the database team from the <a href="https://cuibinpku.github.io/index.html" target="_blank" rel="nofollow">DAIR Lab</a> at Peking University.
 
 
 
 
 
 ## Why DBTune?
-- **Optimized for database tuning:** DBTune has customized functions and user-friendly interfaces for tuning the DBMSs. Users can conduct performance tuning, resource tuning or multiple-objective tuning via simply setting their tuning objectives.
+- **Optimized for database tuning:** DBTune has customized functions and user-friendly interfaces for tuning the DBMSs. Users can conduct performance tuning, resource tuning or multiple-objective tuning by simply setting their tuning objectives.
 
-- **Comprehensive technique supports and automatic selection:** DBTune is equipped with the state-of-the-art tuning techniques.
+- **Comprehensive technique supports and automatic selection:** DBTune is equipped with state-of-the-art tuning techniques.
 It automatically chooses the proper algorithms for a specific tuning task to separate algorithm selection complexity  away from the user.
 
-- **Performance boosted by transfer learning:** DBTune extracts knowledge from historical tuning tasks to speed up the current tuning. The more users utilize DBTune, the faster the tuning would be. 
+- **Performance boosted by transfer learning:** DBTune extracts knowledge from historical tuning tasks to speed up the current tuning. The more users utilize DBTune, the faster the tuning will be. 
 
 ### Overview of Supported Techniques 
 DBTune e supports the whole pipeline of configuration tuning, including knob selection, configuration tuning and knowledge transfer. 
@@ -28,7 +28,7 @@ Installation Requirements:
 - Python >= 3.6 
 
 ### Manual Installation from Source
-To install the newest DBTune package, just type the following scripts on the command line:
+To install the newest DBTune package, type the following scripts on the command line:
  ```shell
    git clone git@github.com:Blairruc-pku/DBTuner.git && cd DBTune
    pip install -r requirements.txt
@@ -61,7 +61,7 @@ Please reffer to the <a href="https://github.com/Blairruc-pku/DBTuner/blob/main/
 ## Quick Start
 
  
-1. Specify the tuning objective. Here are some examples.
+1. Specify the tuning objective in `config_auto.ini`. Here are some examples.
 
 
     Performance tuning, e.g., maximizing throughputs.
@@ -88,6 +88,7 @@ Please reffer to the <a href="https://github.com/Blairruc-pku/DBTuner/blob/main/
 
 2. Conduct Tuning.
     ```bash
+    cd scripts
     python optimize.py  --config=config_performance.ini
     ```
 
@@ -117,5 +118,5 @@ ACM Conference on Management of Data .<br>
 
 If you have any technical questions, please submit new issues.
 
-If you have any other questions, please contact: Xinyi Zhang[zhang_xinyi@pku.edu.cn] and Zhuo Chang[z.chang@pku.edu.cn].
+If you have any other questions, please contact Xinyi Zhang[zhang_xinyi@pku.edu.cn] and Zhuo Chang[z.chang@pku.edu.cn].
   
