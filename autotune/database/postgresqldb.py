@@ -27,7 +27,7 @@ class PostgresqlDB:
         self.passwd = args['passwd']
         self.dbname = args['dbname']
         self.sock = args['sock']
-        self.pid = args['pid']
+        self.pid = int(args['pid'])
         self.pgcnf = args['cnf']
         self.pg_ctl = args['pg_ctl']
         self.pgdata = args['pgdata']

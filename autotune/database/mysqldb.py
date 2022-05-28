@@ -31,7 +31,7 @@ class MysqlDB:
         self.passwd = args['passwd']
         self.dbname = args['dbname']
         self.sock = args['sock']
-        self.pid = args['pid']
+        self.pid = int(args['pid'])
         self.mycnf = args['cnf']
         self.mysqld = args['mysqld']
 
