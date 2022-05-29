@@ -4,6 +4,7 @@ import time
 import threading
 import subprocess
 import paramiko
+import logging
 import numpy as np
 import multiprocessing as mp
 from getpass import getpass
@@ -19,6 +20,9 @@ log_size_default = 50331648
 
 RESTART_WAIT_TIME = 5
 TIMEOUT_CLOSE = 60
+
+logging.getLogger("paramiko").setLevel(logging.ERROR)
+
 
 class MysqlDB:
     def __init__(self, args):
@@ -76,7 +80,7 @@ class MysqlDB:
             try:
                 sftp.get(self.mycnf, cnf)
             except IOError:
-                print('MYCNF not exists!')
+                logger.error('MYCNF not exists!')
             if sftp: sftp.close()
             if ssh: ssh.close()
         else:
@@ -100,7 +104,7 @@ class MysqlDB:
             try:
                 sftp.put(cnf, self.mycnf)
             except IOError:
-                print('MYCNF not exists!')
+                logger.error('MYCNF not exists!')
             if sftp: sftp.close()
             if ssh: ssh.close()
 
@@ -123,7 +127,7 @@ class MysqlDB:
             if ret_code == 0:
                 logger.info("Close db successfully")
             else:
-                print("Force close DB!")
+                logger.info("Force close DB!")
                 ssh.exec_command(force_kill_cmd1)
                 ssh.exec_command(force_kill_cmd2)
             ssh.close()
@@ -136,9 +140,9 @@ class MysqlDB:
                 outs, errs = p_close.communicate(timeout=TIMEOUT_CLOSE)
                 ret_code = p_close.poll()
                 if ret_code == 0:
-                    print("Close db successfully")
+                    logger.info("Close db successfully")
             except subprocess.TimeoutExpired:
-                print("Force close!")
+                logger.info("Force close!")
                 os.system(force_kill_cmd1)
                 os.system(force_kill_cmd2)
             logger.info('mysql is shut down')
@@ -234,7 +238,7 @@ class MysqlDB:
         for key in knobs.keys():
             self.set_knob_value(db_conn, key, knobs[key])
         db_conn.close_db()
-        print("[{}] Knobs applied online!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
+        logger.info("[{}] Knobs applied online!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
         return True
 
     def apply_knobs_offline(self, knobs):

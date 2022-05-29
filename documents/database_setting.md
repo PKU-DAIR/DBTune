@@ -24,7 +24,7 @@ cnf = ~/cnf/mysql.cnf
 - If you are tuning a database on a **remote** host: 
   Please set `remote_mode=True`, 
 and set `ssh_user` to your username for login to the remote host. 
-  The followed parameters should be set according to the information of the remote database.
+  Other parameters should be set according to the information of the remote database.
   
     - Note, before remote mode tuning, you should also set up **SSH Passwordless Login**. Specifically,
         1. Create public and private keys using ssh-key-gen on local-host
@@ -35,7 +35,10 @@ and set `ssh_user` to your username for login to the remote host.
            where `id-rsa.pub` is the public key.
         2. Copy the public key to `~/.ssh/authorized_keys` in remote-host
         3. Try connecting the remote host without password by `ssh -l SSH_USERNAME HOST`
-    
+    - A remote resource monitor process should be started on remote host before tuning, by executing:
+        ```python
+        python script/remote_resource_monitor.py
+        ```
 
 ## Tuning non-dynamic knobs
 Tuning non-dynamic knobs needs restarting the database.

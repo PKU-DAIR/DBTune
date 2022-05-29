@@ -133,9 +133,9 @@ DBTune support 3 transfer frameworks:  workload_map, rgpe, finetune.
 It uses the data in `/logs/bo_history`  as source data for tansfer.
 Turn off Knowledge Transfer by setting "transfer_framework" = none.
 
-
-
-
+## Plot Convergence
+DBTune supports visualization for single-objective optimization tasks.
+After the optimization, convergence plot will be save to `task_id.png`
 
 
 

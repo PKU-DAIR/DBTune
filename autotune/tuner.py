@@ -122,16 +122,11 @@ class DBTuner:
                        params=self.model_params_path,
                        )
 
-        save_file = self.args_tune['task_id'] + '.pkl'
-        advisor = bo.config_advisor
         history = bo.run()
-        '''try:
-            history = bo.run()
-        except:
-            with open(save_file, 'wb') as f:
-                pickle.dump(bo.config_advisor.history_container, f)
-                print("Save history recorde to {}".format(save_file))'''
-
+        if history.num_objs == 1:
+            import matplotlib.pyplot as plt
+            history.plot_convergence()
+            plt.savefig('%s.png' % history.task_id)
 
 
     @staticmethod

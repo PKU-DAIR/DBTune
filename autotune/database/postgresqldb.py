@@ -3,6 +3,7 @@ import time
 import threading
 import subprocess
 import paramiko
+import logging
 import numpy as np
 import multiprocessing as mp
 from getpass import getpass
@@ -15,6 +16,9 @@ dst_data_path = os.environ.get("DATADST")
 src_data_path = os.environ.get("DATASRC")
 RESTART_WAIT_TIME = 20
 TIMEOUT_CLOSE = 60
+
+logging.getLogger("paramiko").setLevel(logging.ERROR)
+
 
 class PostgresqlDB:
     def __init__(self, args):
@@ -93,7 +97,7 @@ class PostgresqlDB:
             try:
                 sftp.get(self.pgcnf, cnf)
             except IOError:
-                print('PGCNF not exists!')
+                logger.info('PGCNF not exists!')
             if sftp: sftp.close()
             if ssh: ssh.close()
         else:
@@ -117,7 +121,7 @@ class PostgresqlDB:
             try:
                 sftp.put(cnf, self.pgcnf)
             except IOError:
-                print('PGCNF not exists!')
+                logger.info('PGCNF not exists!')
             if sftp: sftp.close()
             if ssh: ssh.close()
 
@@ -139,7 +143,7 @@ class PostgresqlDB:
             if ret_code == 0:
                 logger.info("Close db successfully")
             else:
-                print("Force close DB!")
+                logger.info("Force close DB!")
                 ssh.exec_command(force_kill_cmd1)
                 ssh.exec_command(force_kill_cmd2)
             ssh.close()
@@ -151,9 +155,9 @@ class PostgresqlDB:
                 outs, errs = p_close.communicate(timeout=TIMEOUT_CLOSE)
                 ret_code = p_close.poll()
                 if ret_code == 0:
-                    print("Close db successfully")
+                    logger.info("Close db successfully")
             except subprocess.TimeoutExpired:
-                print("Force close!")
+                logger.info("Force close!")
                 os.system(force_kill_cmd1)
                 os.system(force_kill_cmd2)
             logger.info('postgresql is shut down')
@@ -251,7 +255,7 @@ class PostgresqlDB:
         for key in knobs.keys():
             self.set_knob_value(db_conn, key, knobs[key])
         db_conn.close_db()
-        print("[{}] Knobs applied online!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
+        logger.info("[{}] Knobs applied online!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
         return True
 
     def apply_knobs_offline(self, knobs):
@@ -264,7 +268,7 @@ class PostgresqlDB:
                 wal_segment_size = 16
             if knobs['min_wal_size'] < 2 * wal_segment_size:
                 knobs['min_wal_size'] = 2 * wal_segment_size
-                logging.info('"min_wal_size" must be at least twice "wal_segment_size"')
+                logger.info('"min_wal_size" must be at least twice "wal_segment_size"')
 
         knobs_not_in_cnf = self._gen_config_file(knobs)
         sucess = self._start_postgres()
