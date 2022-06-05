@@ -40,7 +40,11 @@ class DBEnv:
         self.generate_time()
         self.y_variable = eval(args_tune['performance_metric'])
         self.reference_point = self.generate_reference_point(eval(args_tune['reference_point']))
-        self.constraints = eval(args_tune['constraints'])
+
+        if args_tune['constraints'] is None or args_tune['constraints'] == '':
+            self.constraints = []
+        else:
+            self.constraints = eval(args_tune['constraints'])
         self.lhs_log = args['lhs_log']
         self.cpu_core = args['cpu_core']
         self.info =  {

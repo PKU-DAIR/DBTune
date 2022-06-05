@@ -23,8 +23,10 @@ class DBTuner:
         self.surrogate_type = None
         self.config_space = ConfigurationSpace()
         self.objs = eval(args_tune['performance_metric'])
-        self.constraints = eval(args_tune['constraints'])
-
+        if args_tune['constraints'] is None or args_tune['constraints'] == '':
+            self.constraints = []
+        else:
+            self.constraints = eval(args_tune['constraints'])
         self.setup_configuration_space()
         self.setup_transfer()
 

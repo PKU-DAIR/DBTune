@@ -296,11 +296,11 @@ class PipleLine(BOBase):
         self.iteration_id += 1
         # Logging.
         if self.num_constraints > 0:
-            self.logger.info('Iteration %d, objective value: %s. constraints: %s.'
+            self.logger.info('Iteration %d, objective value: %s, constraints: %s.'
                              % (self.iteration_id, objs, constraints))
         else:
-            self.logger.info('Iteration %d, objective value: %s ,improvement,: :.2%' % (self.iteration_id, objs, (objs-self.default_obj))/self.default_obj)
-
+            #self.logger.info('Iteration %d, objective value: %s ,improvement,: :.2%' % (self.iteration_id, objs, (objs-self.default_obj))/self.default_obj)
+            self.logger.info('Iteration %d, objective value: %s.' % (self.iteration_id, objs))
         return config, trial_state, constraints, objs
 
 
