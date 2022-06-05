@@ -59,7 +59,7 @@ def get_default_dict(dic):
                 elif config_dic['incremental'].lower() == 'increase':
                     config_dic['initial_tunable_knob_num'] = 5
                 else:
-                    config_dic['initial_tunable_knob_num'] = int(config_dic['knob_num'])/2
+                    config_dic['initial_tunable_knob_num'] = int(int(config_dic['knob_num'])/2)
             if key ==  'incremental_every':
                 if config_dic['incremental'].lower() == 'decrease':
                     config_dic['incremental_every'] =  int(config_dic['max_runs'] / (config_dic['initial_tunable_knob_num'] / config_dic['incremental_num'])) + 1

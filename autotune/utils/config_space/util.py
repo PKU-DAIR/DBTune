@@ -58,3 +58,11 @@ def impute_default_values(
         configs_array[nonfinite_mask, idx] = default
 
     return configs_array
+
+def config2df(configs):
+    config_dic = defaultdict(list)
+    for config in configs:
+        for k in config:
+            config_dic[k].append(config[k])
+
+    return pd.DataFrame.from_dict(config_dic)

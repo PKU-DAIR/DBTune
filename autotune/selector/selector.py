@@ -11,10 +11,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 from autotune.utils.fanova import fANOVA
 from autotune.utils.config_space import ConfigurationSpace
-from autotune.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.config_space.util import convert_configurations_to_array, config2df
 from autotune.utils.logging_utils import get_logger
 from ConfigSpace import CategoricalHyperparameter, OrdinalHyperparameter, Constant
 import pdb
+from collections import defaultdict
 
 
 class KnobSelector(ABC):
@@ -29,18 +30,17 @@ class KnobSelector(ABC):
 class SHAPSelector(KnobSelector):
 
     def knob_selection(self, config_space, history_container, num_hps, prediction=True):
-
         columns = history_container.config_space_all.get_hyperparameter_names()
 
-        X_df = pd.DataFrame(history_container.configurations_all)
+        X_df = config2df(history_container.configurations_all)
         X_df = X_df[columns]
 
-        X_default_df = pd.DataFrame([history_container.config_space_all.get_default_configuration(), ])
+        X_default_df = config2df([history_container.config_space_all.get_default_configuration(), ])
         X_default_df = X_default_df[columns]
 
         le = LabelEncoder()
         for col in list(X_df.columns):
-            if isinstance(history_container.config_space_all[col], CategoricalHyperparameter):
+            if isinstance(history_container.config_space_all.get_hyperparameters_dict()[col], CategoricalHyperparameter):
                 le.fit(X_df[col])
                 X_df[col] = le.transform(X_df[col])
                 X_default_df[col] = le.transform(X_default_df[col])
@@ -63,11 +63,11 @@ class SHAPSelector(KnobSelector):
         model = LGBMRegressor()
         model.fit(X_df, Y)
 
-        df = pd.DataFrame(history_container.configurations_all)
+        df = config2df(history_container.configurations_all)
         df = df[columns]
         df['objs'] = np.array(history_container.get_transformed_perfs())
 
-        idx = df[df['objs'] < df['objs'].quantile(0.1)].index.tolist()
+        idx = df[df['objs'] <= df['objs'].quantile(0.1)].index.tolist()
         explainerModel = shap.TreeExplainer(model)
         shap_values = explainerModel.shap_values(np.array(X_df.loc[idx, :]))
         shap_value_default = explainerModel.shap_values(np.array(X_default_df))[-1]
