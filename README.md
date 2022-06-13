@@ -119,4 +119,6 @@ ACM Conference on Management of Data .<br>
 If you have any technical questions, please submit new issues.
 
 If you have any other questions, please contact Xinyi Zhang[zhang_xinyi@pku.edu.cn] and Zhuo Chang[z.chang@pku.edu.cn].
-  
+## **License**
+
+The entire codebase is under [MIT license](LICENSE).
