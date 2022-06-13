@@ -305,6 +305,8 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         if self.num_objs == 1:
             if self.surrogate_type.startswith('tlbo_'):
                 self.surrogate_model.train(history_container)
+            elif self.surrogate_type.startswith('context_'):
+                self.surrogate_model.train(X, Y, contexts = np.random.uniform(size=(X.shape[0],10)))
             else:
                 self.surrogate_model.train(X, Y)
         elif self.acq_type == 'parego':

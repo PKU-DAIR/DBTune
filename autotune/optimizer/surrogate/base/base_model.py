@@ -90,7 +90,7 @@ class AbstractModel(object):
         # Initial types array which is used to reset the type array at every call to train()
         self._initial_types = types.copy()
 
-    def train(self, X: np.ndarray, Y: np.ndarray) -> 'AbstractModel':
+    def train(self, X: np.ndarray, Y: np.ndarray, contexts: np.ndarray=None) -> 'AbstractModel':
         """Trains the Model on X and Y.
 
         Parameters
@@ -134,9 +134,9 @@ class AbstractModel(object):
                     dtype=np.uint,
                 )
 
-        return self._train(X, Y)
+        return self._train(X, Y, contexts)
 
-    def _train(self, X: np.ndarray, Y: np.ndarray) -> 'AbstractModel':
+    def _train(self, X: np.ndarray, Y: np.ndarray, contexts: np.ndarray=None) -> 'AbstractModel':
         """Trains the random forest on X and y.
 
         Parameters

@@ -11,6 +11,7 @@ def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data
     func_str = func_str.lower()
     types, bounds = get_types(config_space)
     seed = rng.randint(MAXINT)
+
     if func_str == 'prf':
         try:
             from autotune.optimizer.surrogate.base.rf_with_instances import RandomForestWithInstances
@@ -29,6 +30,9 @@ def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data
     elif func_str == 'lightgbm':
         from autotune.optimizer.surrogate.lightgbm import LightGBM
         return LightGBM(config_space, types=types, bounds=bounds, seed=seed)
+    elif func_str == 'context_prf':
+        from autotune.optimizer.surrogate.base.rf_with_contexts import RandomForestWithContexts
+        return RandomForestWithContexts(types=types, bounds=bounds, seed=seed)
 
     if func_str == 'random_forest':
         from autotune.optimizer.surrogate.skrf import RandomForestSurrogate

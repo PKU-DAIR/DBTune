@@ -94,6 +94,11 @@ class DBTuner:
 
             self.model_params_path = self.args_tune['params']
 
+        elif   self.transfer_framework == 'context':
+            self.surrogate_type = 'context_prf'
+            if self.method != 'SMAC':
+                raise ValueError('We currently only support SMAC. Invalid method for context!')
+
         else:
             raise ValueError('Invalid string %s for transfer framework!' % self.transfer_framework)
 
