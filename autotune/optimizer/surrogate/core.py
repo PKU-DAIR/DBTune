@@ -6,7 +6,7 @@ from autotune.utils.util_funcs import get_types
 
 
 
-def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data=None):
+def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data=None, context=None):
     assert config_space is not None
     func_str = func_str.lower()
     types, bounds = get_types(config_space)
@@ -32,7 +32,7 @@ def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data
         return LightGBM(config_space, types=types, bounds=bounds, seed=seed)
     elif func_str == 'context_prf':
         from autotune.optimizer.surrogate.base.rf_with_contexts import RandomForestWithContexts
-        return RandomForestWithContexts(types=types, bounds=bounds, seed=seed)
+        return  RandomForestWithContexts(types=types, bounds=bounds, seed=seed, current_context=context)
 
     if func_str == 'random_forest':
         from autotune.optimizer.surrogate.skrf import RandomForestSurrogate

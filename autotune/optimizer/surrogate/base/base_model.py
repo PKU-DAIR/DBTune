@@ -134,7 +134,8 @@ class AbstractModel(object):
                     dtype=np.uint,
                 )
 
-        return self._train(X, Y, contexts)
+        self.contexts = contexts
+        return self._train(X, Y)
 
     def _train(self, X: np.ndarray, Y: np.ndarray, contexts: np.ndarray=None) -> 'AbstractModel':
         """Trains the random forest on X and y.
@@ -175,7 +176,7 @@ class AbstractModel(object):
 
             if len(X.shape) != 2:
                 raise ValueError('Expected 2d array, got %dd array!' % len(X.shape))
-            if X.shape[1] != len(self._initial_types):
+            if X.shape[1] != self.types.shape[0]:
                 raise ValueError('Rows in X should have %d entries but have %d!' % (len(self._initial_types), X.shape[1]))
 
             if self.pca:

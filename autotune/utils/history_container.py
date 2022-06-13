@@ -19,7 +19,7 @@ Perf = collections.namedtuple(
     'perf', ['cost', 'time', 'status', 'additional_info'])
 
 Observation = collections.namedtuple(
-    'Observation', ['config', 'trial_state', 'constraints', 'objs', 'elapsed_time', 'EM', 'IM', 'resource', 'info'])
+    'Observation', ['config', 'trial_state', 'constraints', 'objs', 'elapsed_time', 'EM', 'IM', 'resource', 'info', 'context'])
 
 
 def detect_valid_history_file(dir):
@@ -73,6 +73,7 @@ class HistoryContainer(object):
         self.external_metrics = list() # all external metrics
         self.internal_metrics = list() # all internal metrics
         self.resource = list() # all resource information
+        self.contexts = list()
 
         self.update_times = list()  # record all update times
 
@@ -109,6 +110,7 @@ class HistoryContainer(object):
         external_metrics = observation.EM
         resource = observation.resource
         info = observation.info
+        context = observation.context
 
         if not self.info:
             self.info = info
@@ -127,6 +129,7 @@ class HistoryContainer(object):
         self.internal_metrics.append(internal_metrics)
         self.external_metrics.append(external_metrics)
         self.resource.append(resource)
+        self.contexts.append(context)
 
         transform_perf = False
         failed = False
@@ -168,6 +171,10 @@ class HistoryContainer(object):
             self.transform_perf_index.append(cur_idx)
         if failed:
             self.failed_index.append(cur_idx)
+
+    def get_contexts(self):
+        return np.vstack(self.contexts)
+
 
     def add(self, config: Configuration, perf):
         if config in self.data:

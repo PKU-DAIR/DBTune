@@ -59,6 +59,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         self.config_space_seed = self.rng.randint(MAXINT)
         self.config_space.seed(self.config_space_seed)
         self.ref_point = ref_point
+        self.current_context = None
 
         # initial design
         if initial_configurations is not None and len(initial_configurations) > 0:
@@ -218,7 +219,9 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
             self.surrogate_model = build_surrogate(func_str=self.surrogate_type,
                                                    config_space=config_space,
                                                    rng=self.rng,
-                                                   history_hpo_data=self.history_bo_data)
+                                                   history_hpo_data=self.history_bo_data,
+                                                   context=self.current_context
+                                                   )
         else:  # multi-objectives
             self.surrogate_model = [build_surrogate(func_str=self.surrogate_type,
                                                     config_space=config_space,
@@ -306,7 +309,8 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
             if self.surrogate_type.startswith('tlbo_'):
                 self.surrogate_model.train(history_container)
             elif self.surrogate_type.startswith('context_'):
-                self.surrogate_model.train(X, Y, contexts = np.random.uniform(size=(X.shape[0],10)))
+                contexts = history_container.get_contexts()
+                self.surrogate_model.train(X, Y, contexts= contexts)
             else:
                 self.surrogate_model.train(X, Y)
         elif self.acq_type == 'parego':

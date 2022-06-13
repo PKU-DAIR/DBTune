@@ -220,12 +220,9 @@ class TPE_Optimizer:
 
         # quick rule of thumb
         bw_estimation = 'normal_reference'
-        import pdb
-        pdb.set_trace()
         bad_kde = sm.nonparametric.KDEMultivariate(data=train_data_bad, var_type=self.kde_vartypes,
                                                    bw=bw_estimation)
-        import pdb
-        pdb.set_trace()
+
         good_kde = sm.nonparametric.KDEMultivariate(data=train_data_good, var_type=self.kde_vartypes,
                                                     bw=bw_estimation)
 

@@ -68,7 +68,7 @@ class PipleLine(BOBase):
         super().__init__(objective_function, config_space, task_id=task_id, logging_dir=logging_dir,
                          random_state=random_state, initial_runs=initial_runs, max_runs=max_runs,
                          runtime_limit=runtime_limit, sample_strategy=sample_strategy,
-                         time_limit_per_trial=time_limit_per_trial, history_bo_data=history_bo_data)
+                         time_limit_per_trial=time_limit_per_trial, surrogate_type=surrogate_type, history_bo_data=history_bo_data)
 
         self.num_objs = num_objs
         self.num_constraints = num_constraints
@@ -84,6 +84,7 @@ class PipleLine(BOBase):
         self.num_hps_max = len(self.config_space_all.get_hyperparameters())
         self.num_metrics = num_metrics
         self.init_selector()
+        self.current_context = None
         advisor_kwargs = advisor_kwargs or {}
 
         # init history container
@@ -100,7 +101,7 @@ class PipleLine(BOBase):
         # load history container if exists
         self.load_history()
 
-        if optimizer_type == ('MBO', 'SMAC', 'auto'):
+        if optimizer_type in ('MBO', 'SMAC', 'auto'):
             from autotune.optimizer.bo_optimizer import BO_Optimizer
             self.optimizer = BO_Optimizer(config_space,
                                           self.history_container,
@@ -224,7 +225,7 @@ class PipleLine(BOBase):
 
                 new_config_space = ConfigurationSpace()
                 for knob in self.knob_rank[:num_hps]:
-                    new_config_space.add_hyperparameter(self.config_space_all[knob])
+                    new_config_space.add_hyperparameter(self.config_space_all.get_hyperparameter(knob) )
 
                 if not self.config_space == new_config_space:
                     logger.info("new configuration space: {}".format(new_config_space))
@@ -237,7 +238,7 @@ class PipleLine(BOBase):
 
                 new_config_space = ConfigurationSpace()
                 for knob in self.knob_rank[:num_hps]:
-                    new_config_space.add_hyperparameter(self.config_space_all[knob])
+                    new_config_space.add_hyperparameter(self.config_space_all.get_hyperparameter(knob))
 
                 # fix the knobs that no more to tune
                 inc_config = self.history_container.incumbents[0][0]
@@ -273,6 +274,12 @@ class PipleLine(BOBase):
             self.iteration_id = len(self.history_container.configurations)
             self.logger.info('Load {} iterations from {}'.format(self.iteration_id, fn))
 
+    def reset_context(self, context):
+        self.current_context = context
+        self.optimizer.current_context = context
+        if self.optimizer.surrogate_model:
+            self.optimizer.surrogate_model.current_context =  context
+
     def evaluate(self, config):
         trial_state = SUCCESS
         start_time = time.time()
@@ -284,14 +291,20 @@ class PipleLine(BOBase):
 
         elapsed_time = time.time() - start_time
 
+        if self.surrogate_type == 'context_prf' and config == self.history_container.config_space.get_default_configuration():
+            self.reset_context(np.array(im))
+
         observation = Observation(
             config=config, objs=objs, constraints=constraints,
-            trial_state=trial_state, elapsed_time=elapsed_time, EM=em, resource=resource, IM=im, info=info
+            trial_state=trial_state, elapsed_time=elapsed_time, EM=em, resource=resource, IM=im, info=info, context=self.current_context
         )
         self.history_container.update_observation(observation)
 
         if self.optimizer_type in ['GA', 'TurBO', 'DDPG']:
             self.optimizer.update(observation)
+
+
+
 
         self.iteration_id += 1
         # Logging.

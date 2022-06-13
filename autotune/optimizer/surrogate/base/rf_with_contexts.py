@@ -11,8 +11,8 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.exceptions import NotFittedError
 
-from openbox.surrogate.base.base_model import  AbstractModel
-from openbox.utils.constants import N_TREES
+from autotune.optimizer.surrogate.base.base_model import  AbstractModel
+from autotune.utils.constants import N_TREES
 
 
 
@@ -137,7 +137,7 @@ class RandomForestWithContexts(AbstractModel):
 
 
 
-    def _train(self, X: np.ndarray, y: np.ndarray, contexts: np.ndarray):
+    def _train(self, X: np.ndarray, y: np.ndarray):
         """Trains the random forest on X and y.
 
         Parameters
@@ -151,6 +151,7 @@ class RandomForestWithContexts(AbstractModel):
         -------
         self
         """
+        contexts = self.contexts
         if self.context_pca and X.shape[0] > self.context_pca.n_components:
             # scale features
             X_feats = self.context_scaler.fit_transform(contexts)
@@ -299,6 +300,7 @@ class RandomForestWithContexts(AbstractModel):
 
         if self.instance_features is None or \
                 len(self.instance_features) == 0:
+
             mean, var = self.predict(X)
             var[var < self.var_threshold] = self.var_threshold
             var[np.isnan(var)] = self.var_threshold
@@ -365,4 +367,3 @@ class RandomForestWithContexts(AbstractModel):
             var = var.reshape((-1, 1))
 
         return mean, var
-w
