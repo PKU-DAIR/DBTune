@@ -100,7 +100,7 @@ class PipleLine(BOBase):
         # load history container if exists
         self.load_history()
 
-        if optimizer_type == 'MBO' or optimizer_type == 'SMAC':
+        if optimizer_type == ('MBO', 'SMAC', 'auto'):
             from autotune.optimizer.bo_optimizer import BO_Optimizer
             self.optimizer = BO_Optimizer(config_space,
                                           self.history_container,

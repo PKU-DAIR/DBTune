@@ -63,6 +63,8 @@ class DBTuner:
                 self.surrogate_type = 'prf'
             elif self.method == 'MBO':
                 self.surrogate_type = 'gp'
+            elif self.method == 'auto':
+                self.surrogate_type = 'auto'
 
         elif self.transfer_framework in ['workload_map', 'rgpe']:
             files = os.listdir(self.hc_path)
