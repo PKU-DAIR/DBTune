@@ -123,13 +123,29 @@ class DBEnv:
             raise ValueError('Invalid workload nmae!')
 
     def get_external_metrics(self, filename=''):
-        if not os.path.exists(filename):
-            print("benchmark result file does not exist!")
         if self.workload['name'] == 'sysbench':
+            for _ in range(60):
+                if os.path.exists(filename):
+                    break
+                time.sleep(1)
+            if not os.path.exists(filename):
+                print("benchmark result file does not exist!")
             result = parse_sysbench(filename)
         elif self.workload['name'] == 'oltpbench':
+            for _ in range(60):
+                if os.path.exists('results/{}.summary'.format(filename)):
+                    break
+                time.sleep(1)
+            if not os.path.exists('results/{}.summary'.format(filename)):
+                print("benchmark result file does not exist!")
             result = parse_oltpbench('results/{}.summary'.format(filename))
         elif self.workload['name'] == 'job':
+            for _ in range(60):
+                if os.path.exists(filename):
+                    break
+                time.sleep(1)
+            if not os.path.exists(filename):
+                print("benchmark result file does not exist!")
             dirname, _ = os.path.split(os.path.abspath(__file__))
             select_file = dirname + '/cli/selectedList.txt'
             result = parse_job(filename, select_file, timeout=TIMEOUT_TIME)
@@ -234,7 +250,6 @@ class DBEnv:
                 cpu, avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory = rm.get_monitor_data_avg()
         else:
             cpu, avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory = 0, 0, 0, 0, 0
-
 
         external_metrics = self.get_external_metrics(filename)
         internal_metrics, dirty_pages, hit_ratio, page_data = self.db._post_handle(internal_metrics)
