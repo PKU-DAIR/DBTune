@@ -4,11 +4,9 @@ scikit_learn==0.22.2.post1
 torch>=1.5.0
 mysql-connector-python-rf
 ConfigSpace
-smac
 openbox
 hyperopt
 botorch
-psycopg2
 psycopg2-binary
 matplotlib
 pandas
@@ -20,7 +18,7 @@ scipy
 sklearn
 cython
 scikit-optimize
-#smac
+smac
 #botorch
 #gpytorch
 aliyunsdkcore
@@ -28,4 +26,4 @@ aliyun-python-sdk-rds
 dynaconf
 shap
 lightgbm
-paramiko
+paramiko==2.8
