@@ -201,7 +201,7 @@ class PipleLine(BOBase):
             return
 
         if self.incremental == 'none':
-            if self.num_hps_init == len(self.config_space.get_hyperparameter_names()):
+            if self.num_hps_init == -1 or self.num_hps_init == len(self.config_space.get_hyperparameter_names()):
                 return
 
             new_config_space, _ = self.selector.knob_selection(
@@ -286,7 +286,7 @@ class PipleLine(BOBase):
 
         objs, constraints, em, resource, im, info, trial_state = self.objective_function(config)
 
-        if trial_state == FAILED or trial_state == TIMEOUT:
+        if trial_state == FAILED :
             objs = self.FAILED_PERF
 
         elapsed_time = time.time() - start_time

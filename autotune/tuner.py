@@ -39,7 +39,7 @@ class DBTuner:
             value = KNOBS[name]
             knob_type = value['type']
             if knob_type == 'enum':
-                knob = CategoricalHyperparameter(name, [str(i) for i in value["enum_values"]])
+                knob = CategoricalHyperparameter(name, [str(i) for i in value["enum_values"]], default_value= str(value['default']))
             elif knob_type == 'integer':
                 min_val, max_val = value['min'], value['max']
                 if self.env.knobs_detail[name]['max'] > sys.maxsize:
