@@ -46,6 +46,13 @@ class MysqlDB:
             self.ssh_pk_file = os.path.expanduser('~/.ssh/id_rsa')
             self.pk = paramiko.RSAKey.from_private_key_file(self.ssh_pk_file)
 
+        self.connection_info = {'host': self.host,
+                                'port': self.port,
+                                'user': self.user,
+                                'passwd': self.passwd,
+                                'name': self.dbname}
+        if not self.remote_mode:
+            self.connection_info['socket'] = self.sock
         # resource isolation information
         self.isolation_mode = eval(args['isolation_mode'])
         if self.isolation_mode and self.remote_mode:
@@ -188,18 +195,15 @@ class MysqlDB:
         error, db_conn = None, None
         while True:
             try:
-
-                dbc = MysqlConnector(host=self.host,
-                                     port=self.port,
-                                     user=self.user,
-                                     passwd=self.passwd,
-                                     name=self.dbname)
+                dbc = MysqlConnector(**self.connection_info)
                 db_conn = dbc.conn
                 if db_conn.is_connected():
                     logger.info('Connected to MySQL db')
                     db_conn.close()
                     break
-            except:
+            except Exception as result:
+                if count > 30:
+                    logger.info(result)
                 pass
 
             time.sleep(1)
@@ -227,11 +231,7 @@ class MysqlDB:
         self.reinit_interval = 0
 
     def apply_knobs_online(self, knobs):
-        db_conn = MysqlConnector(host=self.host,
-                                 port=self.port,
-                                 user=self.user,
-                                 passwd=self.passwd,
-                                 name=self.dbname)
+        db_conn = MysqlConnector(**self.connection_info)
         if 'innodb_io_capacity' in knobs.keys():
             self.set_knob_value(db_conn, 'innodb_io_capacity_max', 2 * int(knobs['innodb_io_capacity']))
 
@@ -271,12 +271,7 @@ class MysqlDB:
         try:
             logger.info('sleeping for {} seconds after restarting mysql'.format(RESTART_WAIT_TIME))
             time.sleep(RESTART_WAIT_TIME)
-
-            db_conn = MysqlConnector(host=self.host,
-                                     port=self.port,
-                                     user=self.user,
-                                     passwd=self.passwd,
-                                     name=self.dbname)
+            db_conn = MysqlConnector(**self.connection_info)
             sql1 = 'SHOW VARIABLES LIKE "innodb_log_file_size";'
             sql2 = 'SHOW VARIABLES LIKE "innodb_log_files_in_group";'
             r1 = db_conn.fetch_results(sql1)
@@ -374,11 +369,7 @@ class MysqlDB:
             if counter > warmup:
                 try:
                     # print('collect internal metrics {}'.format(counter))
-                    db_conn = MysqlConnector(host=self.host,
-                                             port=self.port,
-                                             user=self.user,
-                                             passwd=self.passwd,
-                                             name=self.dbname)
+                    db_conn = MysqlConnector(**self.connection_info)
 
                     sql = 'SELECT NAME, COUNT from information_schema.INNODB_METRICS where status="enabled" ORDER BY NAME'
                     res = db_conn.fetch_results(sql, json=False)
@@ -440,11 +431,7 @@ class MysqlDB:
         return result, dirty_pages_per, hit_ratio, page_data
 
     def get_db_size(self):
-        db_conn = MysqlConnector(host=self.host,
-                                 port=self.port,
-                                 user=self.user,
-                                 passwd=self.passwd,
-                                 name=self.dbname)
+        db_conn = MysqlConnector(**self.connection_info)
         sql = 'SELECT CONCAT(round(sum((DATA_LENGTH + index_length) / 1024 / 1024), 2), "MB") as data from information_schema.TABLES where table_schema="{}"'.format(
             self.dbname)
         res = db_conn.fetch_results(sql, json=False)
