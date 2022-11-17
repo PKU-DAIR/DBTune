@@ -1254,7 +1254,7 @@
         "type": "integer"
     },
     "max_connections": {
-        "default": 151,
+        "default": 1000,
         "dynamic": "Yes",
         "max": 100000,
         "min": 1,
