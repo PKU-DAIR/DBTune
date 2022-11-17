@@ -139,7 +139,7 @@ class DBEnv:
             if not os.path.exists('results/{}.summary'.format(filename)):
                 print("benchmark result file does not exist!")
             result = parse_oltpbench('results/{}.summary'.format(filename))
-        elif self.workload['name'] == 'job':
+        elif self.workload['name'] == 'job' or self.workload['name'] == 'tpch':
             for _ in range(60):
                 if os.path.exists(filename):
                     break
@@ -147,7 +147,7 @@ class DBEnv:
             if not os.path.exists(filename):
                 print("benchmark result file does not exist!")
             dirname, _ = os.path.split(os.path.abspath(__file__))
-            select_file = dirname + '/cli/selectedList.txt'
+            select_file = dirname + '/cli/selectedList_{}.txt'.format(self.workload['name'])
             result = parse_job(filename, select_file, timeout=TIMEOUT_TIME)
         else:
             raise ValueError('Invalid workload name!')
@@ -178,8 +178,14 @@ class DBEnv:
                                               filename)
         elif self.workload['name'] == 'job':
             cmd = self.workload['cmd'].format(dirname + '/cli/run_job_{}.sh'.format(self.db.args['db']),
-                                              dirname + '/cli/selectedList.txt',
+                                              dirname + '/cli/selectedList_job.txt',
                                               dirname + '/job_query/queries-{}-new'.format(self.db.args['db']),
+                                              filename,
+                                              self.db.sock)
+        elif self.workload['name'] == 'tpch':
+            cmd = self.workload['cmd'].format(dirname + '/cli/run_tpch_{}.sh'.format(self.db.args['db']),
+                                              dirname + '/cli/selectedList_tpch.txt',
+                                              dirname + '/tpch_query/queries-{}-new'.format(self.db.args['db']),
                                               filename,
                                               self.db.sock)
         else:
