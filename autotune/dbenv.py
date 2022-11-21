@@ -12,7 +12,7 @@ from .knobs import initialize_knobs, get_default_knobs
 import psutil
 import multiprocessing as mp
 from .resource_monitor import ResourceMonitor
-from autotune.workload import SYSBENCH_WORKLOAD, JOB_WORKLOAD, OLTPBENCH_WORKLOADS
+from autotune.workload import SYSBENCH_WORKLOAD, JOB_WORKLOAD, OLTPBENCH_WORKLOADS, TPCH_WORKLOAD
 from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
 from autotune.utils.parser import is_number
 
@@ -85,6 +85,8 @@ class DBEnv:
             wl = dict(OLTPBENCH_WORKLOADS)
         elif self.args['workload'] == 'job':
             wl = dict(JOB_WORKLOAD)
+        elif self.args['workload'] == 'tpch':
+            wl = dict(TPCH_WORKLOAD)
         else:
             raise ValueError('Invalid workload!')
         return wl
@@ -107,7 +109,7 @@ class DBEnv:
             TIMEOUT_TIME = BENCHMARK_RUNNING_TIME + BENCHMARK_WARMING_TIME + 30
             RESTART_FREQUENCY = 200
 
-        elif self.workload['name'] == 'job':
+        elif self.workload['name'] == 'job' or self.workload['name'] == 'tpch':
             try:
                 BENCHMARK_RUNNING_TIME = int(self.args['workload_time'])
             except:

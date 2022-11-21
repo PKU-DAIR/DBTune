@@ -100,6 +100,7 @@ class MysqlDB:
                 knobs_not_in_cnf.append(key)
                 continue
             cnf_parser.set(key, knobs[key])
+
         cnf_parser.replace('/data2/ruike/tmpdir/mysql.cnf')
 
         if self.remote_mode:

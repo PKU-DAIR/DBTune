@@ -23,3 +23,11 @@ JOB_WORKLOAD = {
     # bash run_job.sh queries_list.txt query_dir output.log MYSQL_SOCK
     'cmd': 'bash {} {} {} {} {}'
 }
+
+
+TPCH_WORKLOAD = {
+    'name': 'tpch',
+    'type': 'read',
+    # bash run_job.sh queries_list.txt query_dir output.log MYSQL_SOCK
+    'cmd': 'bash {} {} {} {} {}'
+}

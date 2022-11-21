@@ -23,7 +23,7 @@ from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
 from autotune.utils.limit import time_limit, TimeoutException, no_time_limit_func
 from autotune.utils.util_funcs import get_result
 from autotune.utils.config_space import ConfigurationSpace
-from autotune.selector.selector import SHAPSelector, fANOVASelector, GiniSelector, AblationSelector, LASSOSelector
+from autotune.selector.selector import KnobSelector
 from autotune.optimizer.surrogate.core import build_surrogate, surrogate_switch
 from autotune.optimizer.core import build_acq_func, build_optimizer
 import pdb
@@ -83,7 +83,7 @@ class PipleLine(BOBase):
         self.num_hps_init = num_hps_init
         self.num_hps_max = len(self.config_space_all.get_hyperparameters())
         self.num_metrics = num_metrics
-        self.init_selector()
+        self.selector = KnobSelector(self.selector_type)
         self.current_context = None
         advisor_kwargs = advisor_kwargs or {}
 
@@ -169,17 +169,6 @@ class PipleLine(BOBase):
     def get_incumbent(self):
         return self.history_container.get_incumbents()
 
-    def init_selector(self):
-        if self.selector_type == 'shap':
-            self.selector = SHAPSelector()
-        elif self.selector_type == 'fanova':
-            self.selector = fANOVASelector()
-        elif self.selector_type == 'gini':
-            self.selector = GiniSelector()
-        elif self.selector_type == 'ablation':
-            self.selector = AblationSelector()
-        elif self.selector_type == 'lasso':
-            self.selector = LASSOSelector()
 
     def run(self):
         for _ in tqdm(range(self.iteration_id, self.max_iterations)):

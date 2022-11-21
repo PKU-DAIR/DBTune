@@ -13,55 +13,69 @@ from autotune.utils.fanova import fANOVA
 from autotune.utils.config_space import ConfigurationSpace
 from autotune.utils.config_space.util import convert_configurations_to_array, config2df
 from autotune.utils.logging_utils import get_logger
+from autotune.knobs import initialize_knobs
 from ConfigSpace import CategoricalHyperparameter, OrdinalHyperparameter, Constant
 import pdb
+import json
 from collections import defaultdict
 
 
 class KnobSelector(ABC):
-    def __init__(self):
+    def __init__(self, selector_type):
         self.logger = get_logger(self.__class__.__name__)
+        self.selector_type = selector_type
 
-    @abstractmethod
-    def knob_selection(self, config_space, history_container, num_hps):
-        pass
+    def knob_selection(self,  config_space, history_container, num_hps, **kwargs):
+        if self.selector_type == 'shap':
+            return self.knob_selection_shap( config_space, history_container, num_hps, **kwargs)
+        elif self.selector_type == 'fanova':
+            return self.knob_selection_fanova(config_space, history_container, num_hps, **kwargs)
+        elif self.selector_type == 'gini':
+            return self.knob_selection_gini(config_space, history_container, num_hps, **kwargs)
+        elif self.selector_type == 'ablation':
+           return self.knob_selection_ablation(config_space, history_container, num_hps, **kwargs)
+        elif self.selector_type == 'lasso':
+            return self.knob_selection_lasso(config_space, history_container, num_hps, **kwargs)
 
 
-class SHAPSelector(KnobSelector):
-
-    def knob_selection(self, config_space, history_container, num_hps, prediction=True):
+    def knob_selection_shap(self, config_space, history_container, num_hps, use_imcub = True, prediction=True):
         columns = history_container.config_space_all.get_hyperparameter_names()
 
         X_df = config2df(history_container.configurations_all)
         X_df = X_df[columns]
+        if not use_imcub:
+            X_bench_df = config2df([history_container.config_space_all.get_default_configuration(), ])
+        else:
+            X_bench_df = config2df([history_container.incumbents[0][0]])
 
-        X_default_df = config2df([history_container.config_space_all.get_default_configuration(), ])
-        X_default_df = X_default_df[columns]
-
+        X_bench_df = X_bench_df[columns]
         le = LabelEncoder()
         for col in list(X_df.columns):
             if isinstance(history_container.config_space_all.get_hyperparameters_dict()[col], CategoricalHyperparameter):
                 le.fit(X_df[col])
                 X_df[col] = le.transform(X_df[col])
-                X_default_df[col] = le.transform(X_default_df[col])
+                X_bench_df[col] = le.transform(X_bench_df[col])
             else:
                 X_df[col] = X_df[col].astype('float')
 
-        Y = np.array(history_container.get_transformed_perfs()).astype('float')
-        Y = (Y - Y.mean()) / Y.std()
+
+        Y = -  np.array(history_container.get_transformed_perfs()).astype('float')
+        Y_scaled = (Y - Y.min()) / (Y.max() - Y.min())
 
         if prediction:
-            X_train, X_test, Y_train, Y_test = train_test_split(X_df, Y, test_size=0.05, random_state=0)
+            X_train, X_test, Y_train, Y_test = train_test_split(X_df, Y_scaled, test_size=0.05, random_state=0)
             model = LGBMRegressor()
             model.fit(X_train, Y_train)
-            output = model.predict(X_test)
-            error = np.sqrt(mean_squared_error(Y_test, output))
+            output_scaled = model.predict(X_test)
+            output = output_scaled * (Y.max() - Y.min()) + Y.min()
+            Y_test =  Y_test * (Y.max() - Y.min()) + Y.min()
+            error = np.sqrt(mean_squared_error(Y_test, output ))
             r2_test = r2_score(Y_test, output)
             self.logger.info('The rmse of prediction of test set is: {:.2f}, {:.2%} of average tps, R2: {:.2%}'.format(
                 error, error / Y_test.mean(), r2_test))
 
         model = LGBMRegressor()
-        model.fit(X_df, Y)
+        model.fit(X_df, Y_scaled)
 
         df = config2df(history_container.configurations_all)
         df = df[columns]
@@ -70,9 +84,10 @@ class SHAPSelector(KnobSelector):
         idx = df[df['objs'] <= df['objs'].quantile(0.1)].index.tolist()
         explainerModel = shap.TreeExplainer(model)
         shap_values = explainerModel.shap_values(np.array(X_df.loc[idx, :]))
-        shap_value_default = explainerModel.shap_values(np.array(X_default_df))[-1]
-        knobs_shap = np.sum(shap_values - shap_value_default, axis=0)
-
+        shap_value_default = explainerModel.shap_values(np.array(X_bench_df))[-1]
+        delta = shap_values - shap_value_default
+        delta = np.where(delta > 0, delta, 0)
+        knobs_shap = np.average(delta, axis=0) * (Y.max() - Y.min())
         importance = {}
         for i in range(len(knobs_shap)):
             knob = columns[i]
@@ -85,16 +100,14 @@ class SHAPSelector(KnobSelector):
         cs_new = ConfigurationSpace()
 
         for i in range(num_hps):
-            self.logger.info("Top{}: {}, its shap value is {:.4%}".format(i + 1, a[i][0], a[i][1]))
+            self.logger.info("Top{}: {}, its shap value is {:.4}".format(i + 1, a[i][0], a[i][1]))
             knob = a[i][0]
             cs_new.add_hyperparameter(hps[knob])
 
         return cs_new, rank
 
 
-class fANOVASelector(KnobSelector):
-
-    def knob_selection(self, config_space, history_container, num_hps):
+    def knob_selection_fanova(self, config_space, history_container, num_hps):
 
         columns = history_container.config_space_all.get_hyperparameter_names()
         X = pd.DataFrame(history_container.configurations_all)
@@ -133,9 +146,7 @@ class fANOVASelector(KnobSelector):
         return cs_new, rank
 
 
-class GiniSelector(KnobSelector):
-
-    def knob_selection(self, config_space, history_container, num_hps, prediction=True):
+    def knob_selection_gini(self, config_space, history_container, num_hps, prediction=True, logging=True):
 
         columns = history_container.config_space_all.get_hyperparameter_names()
         X = convert_configurations_to_array(history_container.configurations_all)
@@ -167,16 +178,16 @@ class GiniSelector(KnobSelector):
         cs_new = ConfigurationSpace()
 
         for i in range(num_hps):
-            self.logger.info("Top{}: {}, its feature importance is {:.4%}".format(i + 1, a[i][0], a[i][1]))
+            if logging:
+                self.logger.info("Top{}: {}, its feature importance is {:.4%}".format(i + 1, a[i][0], a[i][1]))
             knob = a[i][0]
             cs_new.add_hyperparameter(hps[knob])
 
         return cs_new, rank
 
 
-class AblationSelector(KnobSelector):
 
-    def knob_selection(self, config_space, history_container, num_hps):
+    def knob_selection_ablation(self, config_space, history_container, num_hps):
 
         columns = history_container.config_space_all.get_hyperparameter_names()
 
@@ -257,9 +268,8 @@ class AblationSelector(KnobSelector):
         return path
 
 
-class LASSOSelector(KnobSelector):
 
-    def knob_selection(self, config_space, history_container, num_hps):
+    def knob_selection_lasso(self, config_space, history_container, num_hps):
 
         columns = history_container.config_space_all.get_hyperparameter_names()
         X = convert_configurations_to_array(history_container.configurations_all)
@@ -293,5 +303,115 @@ class LASSOSelector(KnobSelector):
             cs_new.add_hyperparameter(hps[knob])
 
         return cs_new, rank
+
+
+
+    def get_shape_value(self, config_space, history_container, use_imcub=True):
+        columns = history_container.config_space_all.get_hyperparameter_names()
+
+        X_df = config2df(history_container.configurations_all)
+        X_df = X_df[columns]
+        if not use_imcub:
+            X_bench_df = config2df([history_container.config_space_all.get_default_configuration(), ])
+        else:
+            X_bench_df = config2df([history_container.incumbents[0][0]])
+
+        X_bench_df = X_bench_df[columns]
+        le = LabelEncoder()
+        for col in list(X_df.columns):
+            if isinstance(history_container.config_space_all.get_hyperparameters_dict()[col],
+                          CategoricalHyperparameter):
+                le.fit(X_df[col])
+                X_df[col] = le.transform(X_df[col])
+                X_bench_df[col] = le.transform(X_bench_df[col])
+            else:
+                X_df[col] = X_df[col].astype('float')
+
+        Y = -  np.array(history_container.get_transformed_perfs()).astype('float')
+        Y_scaled = (Y - Y.min()) / (Y.max() - Y.min())
+
+        model = LGBMRegressor()
+        model.fit(X_df, Y_scaled)
+
+        df = config2df(history_container.configurations_all)
+        df = df[columns]
+        df['objs'] = np.array(history_container.get_transformed_perfs())
+
+        idx = df[df['objs'] <= df['objs'].quantile(0.1)].index.tolist()
+        explainerModel = shap.TreeExplainer(model)
+        shap_values = explainerModel.shap_values(np.array(X_df.loc[idx, :]))
+        shap_value_default = explainerModel.shap_values(np.array(X_bench_df))[-1]
+        delta = shap_values - shap_value_default
+        delta = np.where(delta > 0, delta, 0)
+        knobs_shap = np.average(delta, axis=0) * (Y.max() - Y.min())
+        importance = {}
+        for i in range(len(knobs_shap)):
+            knob = columns[i]
+            importance[knob] = knobs_shap[i]
+
+        a = sorted(importance.items(), key=lambda x: x[1], reverse=True)
+        rank =  [a[i][0] for i in range(len(a))]
+        values = dict()
+        for key, imp in a:
+            values[key] = imp
+
+        return rank, values
+
+
+
+
+    def knob_selection_gini_shap(self, config_space, history_container, num_hps):
+        shap_rank, shap_values = self.get_shape_value(config_space, history_container)
+        total_knob_num = len(history_container.config_space_all.get_hyperparameter_names())
+        _, gini_rank = self.knob_selection_gini(config_space, history_container, total_knob_num, logging=False)
+        knobs_added = list()
+        knob_left = list()
+        for knob in gini_rank:
+            if len(knobs_added) >= num_hps:
+                break
+            if shap_values[knob] > 0:
+                knobs_added.append(knob)
+            else:
+                self.logger.info("{} is estimated only has negative effect".format(knob))
+                knob_left.append(knob)
+
+        if len(knobs_added) < num_hps:
+            for knob in shap_rank:
+                if knob not in knobs_added and shap_values[knob] > 0 and len(knobs_added) < num_hps:
+                    knobs_added.append(knob)
+
+        if len(knobs_added) < num_hps:
+            for knob in knob_left:
+                if  len(knobs_added) < num_hps:
+                    knobs_added.append(knob)
+
+        hps = config_space.get_hyperparameters_dict()
+        cs_new = ConfigurationSpace()
+
+        for i in range(num_hps):
+            knob = knobs_added[i]
+            self.logger.info("Top{}: {}, its importance accounts for {:.4}".format(i + 1, knob, shap_values[knob]))
+            cs_new.add_hyperparameter(hps[knob])
+
+        return cs_new, knobs_added
+
+
+    def save_rank(self, rank, incumb , knob_config_file, output_file):
+        konb_template = initialize_knobs(knob_config_file, -1)
+        out_knob = dict()
+        i = 0
+        for knob in rank:
+            konb_template[knob]['important_rank'] = i + 1
+            i = i + 1
+            out_knob[knob] = konb_template[knob]
+        for key in konb_template.keys():
+            if key not in out_knob.keys():
+                konb_template[key]['important_rank'] = -1
+                konb_template[key]['default'] = incumb[key]
+                out_knob[key] = konb_template[key]
+
+        with open(output_file, 'w') as fp:
+            json.dump(out_knob, fp, indent=4)
+
 
 

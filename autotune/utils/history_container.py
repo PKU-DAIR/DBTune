@@ -283,7 +283,6 @@ class HistoryContainer(object):
 
         assert len(self.info['objs']) == self.num_objs
         assert len(self.info['constraints']) == self.num_constraints
-
         knobs_source = data[0]['configuration'].keys()
         knobs_target = self.config_space.get_hyperparameter_names()
         knobs_delete = [knob for knob in knobs_source if knob not in knobs_target]
