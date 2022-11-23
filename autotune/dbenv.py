@@ -229,7 +229,7 @@ class DBEnv:
             else:
                 print("run benchmark get error {}".format(ret_code))
         except subprocess.TimeoutExpired:
-            benchmark_timeout = True
+            #benchmark_timeout = True
             print("[{}] benchmark timeout!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
 
         # terminate Benchmark
