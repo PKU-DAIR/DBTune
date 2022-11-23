@@ -128,7 +128,8 @@ def parse_job(file_path, select_file, timeout=4):
         tmp = line.split('\t')[-1].strip()
         latL.append(float(tmp)/1000)
 
-    for i in range(0, num_sql - len(lines[1:])):
+    measured_num =  len(latL)
+    for i in range(0, num_sql - measured_num):
         latL.append(timeout)
 
     lat = np.percentile(latL, 95)
