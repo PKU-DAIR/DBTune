@@ -16,6 +16,7 @@ from autotune.utils.logging_utils import get_logger
 from autotune.knobs import initialize_knobs
 from ConfigSpace import CategoricalHyperparameter, OrdinalHyperparameter, Constant
 import pdb
+import sys
 import json
 from collections import defaultdict
 
@@ -375,10 +376,20 @@ class KnobSelector(ABC):
                 self.logger.info("{} is estimated only has negative effect".format(knob))
                 knob_left.append(knob)
 
+        shap_num = min(10, int(num_hps/2))
+        for knob in shap_rank[:shap_num]:
+            if not knob in gini_rank:
+                if len(knobs_added) >= num_hps:
+                    knobs_added.pop()
+                knobs_added.append(knob)
+                self.logger.info("Add shap top {}: {} with shap value {}".format(shap_num, knob, shap_values[knob]))
+
         if len(knobs_added) < num_hps:
             for knob in shap_rank:
                 if knob not in knobs_added and shap_values[knob] > 0 and len(knobs_added) < num_hps:
                     knobs_added.append(knob)
+
+
 
         if len(knobs_added) < num_hps:
             for knob in knob_left:
@@ -407,10 +418,10 @@ class KnobSelector(ABC):
         for key in konb_template.keys():
             if key not in out_knob.keys():
                 konb_template[key]['important_rank'] = -1
-                if konb_template[key]['max'] < sys.maxsize:
-                    konb_template[key]['default'] = incumb[key]
-                else:
+                if konb_template[key]['type'] == 'integer' and   konb_template[key]['max'] > sys.maxsize:
                     konb_template[key]['default'] = incumb[key] * 1000
+                else:
+                    konb_template[key]['default'] = incumb[key]
                 out_knob[key] = konb_template[key]
 
         with open(output_file, 'w') as fp:
