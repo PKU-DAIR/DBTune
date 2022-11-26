@@ -416,12 +416,14 @@ class KnobSelector(ABC):
             i = i + 1
             out_knob[knob] = konb_template[knob]
         for key in konb_template.keys():
-            if key not in out_knob.keys():
+            if key not in out_knob.keys() and key  in incumb.keys():
                 konb_template[key]['important_rank'] = -1
                 if konb_template[key]['type'] == 'integer' and   konb_template[key]['max'] > sys.maxsize:
                     konb_template[key]['default'] = incumb[key] * 1000
                 else:
                     konb_template[key]['default'] = incumb[key]
+                out_knob[key] = konb_template[key]
+            else:
                 out_knob[key] = konb_template[key]
 
         with open(output_file, 'w') as fp:
