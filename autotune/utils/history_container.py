@@ -262,7 +262,7 @@ class HistoryContainer(object):
         with open(fn, "w") as fp:
             json.dump({"info": self.info,  "data": data}, fp, indent=2)
 
-    def load_history_from_json(self, fn: str = "history_container.json"):  # todo: all configs
+    def load_history_from_json(self, fn: str = "history_container.json", load_num=None):  # todo: all configs
         try:
             with open(fn) as fp:
                 all_data = json.load(fp)
@@ -283,14 +283,17 @@ class HistoryContainer(object):
 
         assert len(self.info['objs']) == self.num_objs
         assert len(self.info['constraints']) == self.num_constraints
-        knobs_source = data[0]['configuration'].keys()
         knobs_target = self.config_space.get_hyperparameter_names()
-        knobs_delete = [knob for knob in knobs_source if knob not in knobs_target]
-        knobs_add = [knob for knob in knobs_target if knob not in knobs_source]
         knobs_default = self.config_space.get_default_configuration().get_dictionary()
 
+        if not load_num is None:
+            data = data[:load_num]
         for tmp in data:
             config_dict = tmp['configuration'].copy()
+            knobs_source = tmp['configuration'].keys()
+            knobs_delete = [knob for knob in knobs_source if knob not in knobs_target]
+            knobs_add = [knob for knob in knobs_target if knob not in knobs_source]
+
             for knob in knobs_delete:
                 config_dict.pop(knob)
             for knob in knobs_add:

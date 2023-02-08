@@ -8,9 +8,10 @@ from openbox.utils.config_space.util import convert_configurations_to_array
 
 class RGPE(BaseTLSurrogate):
     def __init__(self, config_space, source_hpo_data, seed,
-                 surrogate_type='rf', num_src_hpo_trial=50, only_source=False):
+                 surrogate_type='prf', num_src_hpo_trial=50, only_source=False):
         super().__init__(config_space, source_hpo_data, seed,
                          surrogate_type=surrogate_type, num_src_hpo_trial=num_src_hpo_trial)
+        np.random.seed(seed)
         self.method_id = 'rgpe'
         self.only_source = only_source
         self.build_source_surrogates(normalize='standardize')
@@ -27,7 +28,7 @@ class RGPE(BaseTLSurrogate):
         self.hist_ws = list()
         self.iteration_id = 0
 
-    def train(self, target_hpo_data: HistoryContainer):
+    def train(self, target_hpo_data: HistoryContainer, weight_dilution=True):
         X = convert_configurations_to_array(target_hpo_data.configurations)
         y = target_hpo_data.get_transformed_perfs()
 
@@ -48,6 +49,8 @@ class RGPE(BaseTLSurrogate):
         cached_mu_list, cached_var_list = list(), list()
         instance_num = len(y)
         skip_target_surrogate = False if instance_num >= k_fold_num else True
+        if self.only_source:
+            skip_target_surrogate = True
         # Ignore the target surrogate.
         # skip_target_surrogate = True
 
@@ -139,9 +142,10 @@ class RGPE(BaseTLSurrogate):
 
         self.logger.info('=' * 20)
         w = self.w.copy()
-        for id in range(self.K):
-            if self.ignored_flag[id]:
-                w[id] = 0.
+        if weight_dilution:
+            for id in range(self.K):
+                if self.ignored_flag[id]:
+                    w[id] = 0.
         weight_str = ','.join([('%.2f' % item) for item in w])
         self.logger.info('In iter-%d' % self.iteration_id)
         self.target_weight.append(w[-1])
