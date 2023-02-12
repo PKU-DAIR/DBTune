@@ -7,6 +7,9 @@ import json
 import collections
 from typing import List, Union
 import numpy as np
+from ConfigSpace.hyperparameters import CategoricalHyperparameter, \
+    UniformFloatHyperparameter, UniformIntegerHyperparameter, Constant, \
+    OrdinalHyperparameter
 from autotune.utils.constants import MAXINT, SUCCESS
 from autotune.utils.config_space import Configuration, ConfigurationSpace
 from autotune.utils.logging_utils import get_logger
@@ -14,6 +17,7 @@ from autotune.utils.multi_objective import Hypervolume, get_pareto_front
 from autotune.utils.config_space.space_utils import get_config_from_dict
 from autotune.utils.visualization.plot_convergence import plot_convergence
 from autotune.utils.transform import  get_transform_function
+from openbox.utils.config_space.util import convert_configurations_to_array
 
 Perf = collections.namedtuple(
     'perf', ['cost', 'time', 'status', 'additional_info'])
@@ -547,7 +551,7 @@ class HistoryContainer(object):
         importance_table = AsciiTable(table_data).table
         return importance_table
 
-    def get_shap_importance(self, config_space=None, return_list=False):
+    def get_shap_importance(self, config_space=None, return_dir=False, config_bench=None):
         import shap
         from lightgbm import LGBMRegressor
         from terminaltables import AsciiTable
@@ -557,15 +561,27 @@ class HistoryContainer(object):
         if config_space is None:
             raise ValueError('Please provide config_space to show parameter importance!')
 
-        X = np.array([list(config.get_dictionary().values()) for config in self.configurations])
-        Y = np.array(self.get_transformed_perfs())
+        if config_bench is None:
+            X_bench = self.config_space.get_default_configuration().get_array().reshape(1,-1)
+        else:
+            X_bench = config_bench.get_array().reshape(1,-1)
+
+        X = np.array([list(config.get_array()) for config in self.configurations])
+        Y = -  np.array(self.get_transformed_perfs())
 
         # Fit a LightGBMRegressor with observations
         lgbr = LGBMRegressor()
         lgbr.fit(X, Y)
         explainer = shap.TreeExplainer(lgbr)
+        X_selected = X[Y>=self.get_deafult_performance()]
+        if X_selected.shape[0] == 0:
+            X_selected = X[Y >= np.quantile(Y, 0.9)]
+
         shap_values = explainer.shap_values(X)
-        feature_importance = np.mean(np.abs(shap_values), axis=0)
+        shap_value_default = explainer.shap_values(X_bench)[-1]
+        delta = shap_values - shap_value_default
+        delta = np.where(delta > 0, delta, 0)
+        feature_importance = np.average(delta, axis=0)
 
         keys = [hp.name for hp in config_space.get_hyperparameters()]
         importance_list = []
@@ -573,13 +589,18 @@ class HistoryContainer(object):
             importance_list.append([hp_name, feature_importance[i]])
         importance_list.sort(key=lambda x: x[1], reverse=True)
 
-        if return_list:
-            return importance_list
+        importance_dir = dict()
+        for item in importance_list:
+            importance_dir[item[0]] = item[1]
+
+        if return_dir:
+            return importance_dir
 
         for item in importance_list:
             item[1] = '%.6f' % item[1]
         table_data = [["Parameters", "Importance"]] + importance_list
         importance_table = AsciiTable(table_data).table
+
         return importance_table
 
     def plot_convergence(
@@ -627,6 +648,65 @@ class HistoryContainer(object):
         return plot_convergence(iterations, mins, cliped_losses, xlabel, ylabel, ax, name, alpha, yscale, color,
                                 true_minimum, **kwargs)
 
+
+    def get_deafult_performance(self):
+        default_array = self.config_space.get_default_configuration().get_array()
+        default_list = list()
+        for i,config in enumerate(self.configurations):
+            if (config.get_array() == default_array).all():
+                default_list.append(self.get_transformed_perfs()[i])
+
+        if not len(default_list):
+            pdb.set_trace()
+            self.logger.info("None default configuration evaluated!")
+            return 0
+        else:
+            return  sum(default_list)/len(default_list)
+
+    def get_promising_space(self, quantile_threshold=0):
+        y = - self.get_transformed_perfs()
+        if quantile_threshold == 0:
+            performance_threshold = - self.get_deafult_performance()
+        else:
+            performance_threshold = np.quantile(y, quantile_threshold)
+            if performance_threshold <  - self.get_deafult_performance():
+                performance_threshold = - self.get_deafult_performance()
+
+        X = convert_configurations_to_array(self.configurations)
+
+        X_bad = X[y<performance_threshold]
+        X_good = X[y>=performance_threshold]
+        pruned_space = dict()
+        importances = self.get_shap_importance(return_dir=True)
+
+        for j in range(X.shape[1]):
+            config = self.config_space.get_hyperparameter_names()[j]
+            if isinstance(self.config_space.get_hyperparameters()[j], CategoricalHyperparameter ):
+                good_values = np.unique(X_good[:, j])
+                true_values = list()
+                for t in range(good_values.shape[0]):
+                    value = good_values[t]
+                    true_value = Configuration(self.config_space, vector=X[X[:, j] == value][0])[config]
+                    true_values.append(true_value)
+                pruned_space[config] = (true_values, None, importances[config] / abs(self.get_deafult_performance()))
+                continue
+
+            p_good_max = X_good[:, j].max()
+            lager_set = X_bad[:, j][X_bad[:, j] > p_good_max]
+            if not lager_set.shape[0]:
+                p_max = p_good_max
+            else:
+                p_max = min(lager_set)
+            p_good_min = X_good[:, j].min()
+            smaller_set = X_bad[:, j][X_bad[:, j] < p_good_min]
+            if not smaller_set.shape[0]:
+                p_min = p_good_min
+            else:
+                p_min = max(smaller_set)
+            pruned_space[config] = (p_min, p_max, importances[config] / abs(self.get_deafult_performance()))
+
+
+        return pruned_space
 
 class MOHistoryContainer(HistoryContainer):
     """
@@ -725,6 +805,7 @@ class MOHistoryContainer(HistoryContainer):
 
     def visualize_jupyter(self, *args, **kwargs):
         raise NotImplementedError('visualize_jupyter only supports single objective!')
+
 
 
 

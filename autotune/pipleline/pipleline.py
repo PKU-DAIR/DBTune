@@ -7,8 +7,9 @@ import sys
 import time
 import traceback
 import math
+import random
 from typing import List
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from tqdm import tqdm
 from autotune.utils.util_funcs import check_random_state
 from autotune.utils.logging_utils import get_logger
@@ -26,6 +27,10 @@ from autotune.utils.config_space import ConfigurationSpace
 from autotune.selector.selector import KnobSelector
 from autotune.optimizer.surrogate.core import build_surrogate, surrogate_switch
 from autotune.optimizer.core import build_acq_func, build_optimizer
+from autotune.transfer.tlbo.rgpe import RGPE
+from autotune.utils.util_funcs import check_random_state
+from autotune.utils.config_space import ConfigurationSpace, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
+
 import pdb
 from autotune.knobs import ts, logger
 
@@ -60,6 +65,7 @@ class PipleLine(BOBase):
                  incremental_num=1,
                  num_hps_init=5,
                  num_metrics=65,
+                 space_transfer=False,
                  advisor_kwargs: dict = None,
                  **kwargs
                  ):
@@ -85,6 +91,7 @@ class PipleLine(BOBase):
         self.num_metrics = num_metrics
         self.selector = KnobSelector(self.selector_type)
         self.current_context = None
+        self.space_transfer = space_transfer
         advisor_kwargs = advisor_kwargs or {}
 
         # init history container
@@ -240,8 +247,11 @@ class PipleLine(BOBase):
 
     def iterate(self):
         self.knob_selection()
+        compact_space = None
+        if self.space_transfer and self.iteration_id > 1 and self.iteration_id % 3 == 0:
+            compact_space = self.get_compact_space()
         # get configuration suggestion
-        config = self.optimizer.get_suggestion(history_container=self.history_container)
+        config = self.optimizer.get_suggestion(history_container=self.history_container, compact_space=compact_space)
         _, trial_state, constraints, objs = self.evaluate(config)
 
         return config, trial_state, constraints, objs
@@ -292,9 +302,6 @@ class PipleLine(BOBase):
         if self.optimizer_type in ['GA', 'TurBO', 'DDPG']:
             self.optimizer.update(observation)
 
-
-
-
         self.iteration_id += 1
         # Logging.
         if self.num_constraints > 0:
@@ -306,4 +313,140 @@ class PipleLine(BOBase):
         return config, trial_state, constraints, objs
 
 
+    def get_compact_space(self):
+        if not hasattr(self, 'rgpe'):
+            rng = check_random_state(100)
+            seed = rng.randint(MAXINT)
+            self.rgpe = RGPE(self.config_space, self.history_bo_data, seed, num_src_hpo_trial=-1, only_source=True)
 
+        rank_loss_list = self.rgpe.get_ranking_loss(self.history_container)[:-1]
+        similarity_list = [1 - i for i in rank_loss_list]
+
+        ### filter unsimilar task
+        sample_list = list()
+        similarity_threhold = np.quantile(similarity_list, 0.5)
+        candidate_list, weight = list(), list()
+        for i in range(len(self.history_bo_data)):
+            if similarity_list[i] > similarity_threhold:
+                candidate_list.append(i)
+                weight.append(similarity_list[i] / sum(similarity_list))
+
+        if not len(candidate_list):
+            self.logger.info("Remain the space:{}".format(self.config_space))
+            return self.config_space
+
+        ### determine the number of sampled task
+        if len(self.history_bo_data) > 60:
+            k = int(len(self.history_bo_data) / 15)
+        else:
+            k = 4
+
+        k = min(k, len(candidate_list))
+
+        # sample k task s
+        for j in range(k):
+            item = random.choices(candidate_list, weights=weight, k=1)[0]
+            sample_list.append(item)
+            del (weight[candidate_list.index(item)])
+            candidate_list.remove(item)
+
+        # obtain the pruned space for the sampled tasks
+        important_dict = defaultdict(int)
+        pruned_space_list = list()
+        quantile_min = 1 / 1e9
+        quantile_max = 1 - 1 / 1e9
+        for j in range(len(self.history_bo_data)):
+            if not j in sample_list:
+                continue
+            quantile = quantile_max - (1 - 2 * max(similarity_list[j] - 0.5, 0)) * (quantile_max - quantile_min)
+            ys_source = - self.history_bo_data[j].get_transformed_perfs()
+            performance_threshold = np.quantile(ys_source, quantile)
+            default_performance = - self.history_bo_data[j].get_deafult_performance()
+            self.logger.info("[{}] similarity:{} default:{}, quantile:{}, threshold:{}".format(self.history_bo_data[j].task_id, similarity_list[j], default_performance, quantile, performance_threshold))
+            if performance_threshold < default_performance:
+                quantile = 0
+
+            pruned_space = self.history_bo_data[j].get_promising_space(quantile)
+            pruned_space_list.append(pruned_space)
+            total_imporve = sum([pruned_space[key][2] for key in list(pruned_space.keys())])
+            for key in pruned_space.keys():
+                if not pruned_space[key][0] == pruned_space[key][1]:
+                    if pruned_space[key][2] > 0.01 or pruned_space[key][2] > 0.1 * total_imporve:
+                        # print((key,pruned_space[key] ))
+                        important_dict[key] = important_dict[key] + similarity_list[j] / sum(
+                            [similarity_list[i] for i in sample_list])
+
+        # remove unimportant knobs
+        important_knobs = list()
+        for key in important_dict.keys():
+            if important_dict[key] >= 1/3:
+                important_knobs.append(key)
+
+        # generate target pruned space
+        default_array = self.config_space.get_default_configuration().get_array()
+        default_knobs = self.config_space.get_hyperparameter_names()
+        target_space = ConfigurationSpace()
+        for knob in important_knobs:
+            # CategoricalHyperparameter
+            if isinstance(self.config_space.get_hyperparameters_dict()[knob], CategoricalHyperparameter):
+                values_dict = defaultdict(int)
+                for space in pruned_space_list:
+                    values = space[knob][0]
+                    for v in values:
+                        values_dict[v] += similarity_list[sample_list[pruned_space_list.index(space)]] / sum(
+                            [similarity_list[t] for t in sample_list])
+
+                feasible_value = list()
+                for v in values_dict.keys():
+                    if values_dict[v] > 1/3:
+                        feasible_value.append(v)
+
+                default = self.config_space.get_default_configuration()[knob]
+                if not default in feasible_value:
+                    default = feasible_value[0]
+
+                knob_add = CategoricalHyperparameter(knob, feasible_value, default_value=default)
+                target_space.add_hyperparameter(knob_add)
+                continue
+
+            # Integer
+            index_list = set()
+            for space in pruned_space_list:
+                info = space[knob]
+                if not info[0] == info[1]:
+                    index_list.add(info[0])
+                    index_list.add(info[1])
+            index_list = sorted(index_list)
+            count_array = np.array([index_list[:-1], index_list[1:]]).T
+            count_array = np.hstack((count_array, np.zeros((count_array.shape[0], 1))))
+            for space in pruned_space_list:
+                info = space[knob]
+                if not info[0] == info[1]:
+                    for i in range(count_array.shape[0]):
+                        if count_array[i][0] >= info[0] and count_array[i][1] <= info[1]:
+                            count_array[i][2] += similarity_list[sample_list[pruned_space_list.index(space)]] / sum(
+                                [similarity_list[t] for t in sample_list])
+
+            max_index, min_index = 0, 1
+            # vote
+            for i in range(count_array.shape[0]):
+                if count_array[i][2] > 1/3 :
+                    if count_array[i][0] < min_index:
+                        min_index = count_array[i][0]
+                    if count_array[i][1] > max_index:
+                        max_index = count_array[i][1]
+
+            if max_index == 0 and min_index == 1:
+                continue
+            default = default_array[default_knobs.index(knob)]
+            if default < min_index:
+                default = min_index
+            if default > max_index:
+                default = max_index
+            transform = self.config_space.get_hyperparameters_dict()[knob]._transform
+            knob_add = UniformIntegerHyperparameter(knob, transform(min_index), transform(max_index),
+                                                    transform(default))
+            target_space.add_hyperparameter(knob_add)
+
+        print(target_space)
+        return target_space

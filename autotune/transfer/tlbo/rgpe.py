@@ -153,6 +153,97 @@ class RGPE(BaseTLSurrogate):
         self.hist_ws.append(w)
         self.iteration_id += 1
 
+
+    def get_ranking_loss(self, target_hpo_data: HistoryContainer):
+        X = convert_configurations_to_array(target_hpo_data.configurations)
+        y = target_hpo_data.get_transformed_perfs()
+
+        # Build the target surrogate.
+        self.target_surrogate = self.build_single_surrogate(X, y, normalize='standardize')
+        if self.source_hpo_data is None:
+            return
+
+        # Train the target surrogate and update the weight w.
+        mu_list, var_list = list(), list()
+        for id in range(self.K):
+            mu, var = self.source_surrogates[id].predict(X)
+            mu_list.append(mu)
+            var_list.append(var)
+
+        # Pretrain the leave-one-out surrogates.
+        k_fold_num = 5
+        cached_mu_list, cached_var_list = list(), list()
+        instance_num = len(y)
+        skip_target_surrogate = False if instance_num >= k_fold_num else True
+        if self.only_source:
+            skip_target_surrogate = True
+        # Ignore the target surrogate.
+        # skip_target_surrogate = True
+
+        if not skip_target_surrogate:
+            # Conduct leave-one-out evaluation.
+            if instance_num < k_fold_num:
+                for i in range(instance_num):
+                    row_indexs = list(range(instance_num))
+                    del row_indexs[i]
+                    if (y[row_indexs] == y[row_indexs[0]]).all():
+                        y[row_indexs[0]] += 1e-4
+                    model = self.build_single_surrogate(X[row_indexs, :], y[row_indexs], normalize='standardize')
+                    mu, var = model.predict(X)
+                    cached_mu_list.append(mu)
+                    cached_var_list.append(var)
+            else:
+                # Conduct K-fold cross validation.
+                fold_num = instance_num // k_fold_num
+                for i in range(k_fold_num):
+                    row_indexs = list(range(instance_num))
+                    bound = (instance_num - i * fold_num) if i == (k_fold_num - 1) else fold_num
+                    for index in range(bound):
+                        del row_indexs[i * fold_num]
+
+                    if (y[row_indexs] == y[row_indexs[0]]).all():
+                        y[row_indexs[0]] += 1e-4
+
+                    model = self.build_single_surrogate(X[row_indexs, :], y[row_indexs], normalize='standardize')
+                    mu, var = model.predict(X)
+                    cached_mu_list.append(mu)
+                    cached_var_list.append(var)
+
+        ranking_loss_list = list()
+        for id in range(self.K):
+                #sampled_y = np.random.normal(mu_list[id], var_list[id])
+            rank_loss = 0
+            for i in range(len(y)):
+                for j in range(len(y)):
+                    if (y[i] < y[j]) ^ (mu_list[id][i] < mu_list[id][j]):
+                        rank_loss += 1
+            ranking_loss_list.append(rank_loss / (instance_num * instance_num))
+
+            # Compute ranking loss for target surrogate.
+            rank_loss = 0
+        if not skip_target_surrogate:
+            if instance_num < k_fold_num:
+                for i in range(instance_num):
+                    sampled_y = np.random.normal(cached_mu_list[i], cached_var_list[i])
+                    for j in range(instance_num):
+                        if (y[i] < y[j]) ^ (sampled_y[i] < sampled_y[j]):
+                            rank_loss += 1
+            else:
+                fold_num = instance_num // k_fold_num
+                for fold in range(k_fold_num):
+                    sampled_y = np.random.normal(cached_mu_list[fold], cached_var_list[fold])
+                    bound = instance_num if fold == (k_fold_num - 1) else (fold + 1) * fold_num
+                    for i in range(fold_num * fold, bound):
+                        for j in range(instance_num):
+                            if (y[i] < y[j]) ^ (sampled_y[i] < sampled_y[j]):
+                                rank_loss += 1
+        else:
+            rank_loss = instance_num * instance_num
+        ranking_loss_list.append(rank_loss / (instance_num * instance_num))
+
+        return ranking_loss_list
+
+
     def predict(self, X: np.array):
         mu, var = self.target_surrogate.predict(X)
         if self.source_hpo_data is None:

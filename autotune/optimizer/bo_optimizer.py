@@ -11,7 +11,7 @@ from autotune.utils.logging_utils import get_logger
 from autotune.utils.history_container import HistoryContainer
 from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
 from autotune.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
-from autotune.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.config_space.util import convert_configurations_to_array, impute_incumb_values
 from autotune.utils.constants import MAXINT
 from autotune.optimizer.surrogate.core import build_surrogate
 from autotune.optimizer.core import build_acq_func, build_optimizer
@@ -328,7 +328,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
         return X, Y, cY
 
-    def get_suggestion(self, history_container: HistoryContainer, return_list=False):
+    def get_suggestion(self, history_container: HistoryContainer, return_list=False, compact_space=None):
         # if have enough data, get_suggorate
         num_config_evaluated = len(history_container.configurations)
         num_config_successful = len(history_container.successful_perfs)
@@ -354,33 +354,49 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
                 self.acquisition_function.update(model=self.surrogate_model,
                                                  constraint_models=self.constraint_models,
                                                  eta=incumbent_value,
-                                                 num_data=num_config_evaluated)
+                                                 num_data=num_config_evaluated,
+                                                 compact_space=compact_space,
+                                                 incumbent = history_container.get_incumbents()[0][0]
+                                                 )
             else:  # multi-objectives
                 mo_incumbent_value = history_container.get_mo_incumbent_value()
                 if self.acq_type == 'parego':
                     self.acquisition_function.update(model=self.surrogate_model,
                                                      constraint_models=self.constraint_models,
                                                      eta=scalarized_obj(np.atleast_2d(mo_incumbent_value)),
-                                                     num_data=num_config_evaluated)
+                                                     num_data=num_config_evaluated,
+                                                     compact_space=compact_space,
+                                                     incumbent=history_container.get_incumbents()[0][0]
+                                                     )
                 elif self.acq_type.startswith('ehvi'):
                     partitioning = NondominatedPartitioning(self.num_objs, Y)
                     cell_bounds = partitioning.get_hypercell_bounds(ref_point=self.ref_point)
                     self.acquisition_function.update(model=self.surrogate_model,
                                                      constraint_models=self.constraint_models,
                                                      cell_lower_bounds=cell_bounds[0],
-                                                     cell_upper_bounds=cell_bounds[1])
+                                                     cell_upper_bounds=cell_bounds[1],
+                                                     compact_space=compact_space,
+                                                     incumbent=history_container.get_incumbents()[0][0]
+                                                     )
                 else:
                     self.acquisition_function.update(model=self.surrogate_model,
                                                      constraint_models=self.constraint_models,
                                                      constraint_perfs=cY,  # for MESMOC
                                                      eta=mo_incumbent_value,
                                                      num_data=num_config_evaluated,
-                                                     X=X, Y=Y)
+                                                     X=X, Y=Y,
+                                                     compact_space=compact_space,
+                                                     incumbent=history_container.get_incumbents()[0][0]
+                                                     )
 
 
             # optimize acquisition function
+            if not compact_space is None:
+                self.optimizer.set_compact_space(compact_space)
             challengers = self.optimizer.maximize(runhistory=history_container,
                                                   num_points=5000)
+            if not compact_space is None:
+                challengers.challengers = impute_incumb_values(challengers.challengers, history_container.get_incumbents()[0][0])
             if return_list:
                 # Caution: return_list doesn't contain random configs sampled according to rand_prob
                 return challengers.challengers

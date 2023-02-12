@@ -3,7 +3,7 @@ import sys
 from autotune.utils.config_space import ConfigurationSpace, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
 from autotune.workload_map import WorkloadMapping
 from autotune.pipleline.pipleline import PipleLine
-from .knobs import ts, logger
+from .knobs import ts, logger, initialize_knobs
 from .utils.parser import  get_hist_json
 from autotune.utils.history_container import HistoryContainer
 import pdb
@@ -17,23 +17,26 @@ class DBTuner:
         self.y_variable = env.y_variable
         self.transfer_framework = args_tune['transfer_framework']
         self.hc_path = self.args_tune['data_repo']
+        self.space_transfer = eval(self.args_tune['space_transfer'])
 
         self.hcL = []
         self.model_params_path = ''
         self.surrogate_type = None
-        self.config_space = ConfigurationSpace()
         self.objs = eval(args_tune['performance_metric'])
         if args_tune['constraints'] is None or args_tune['constraints'] == '':
             self.constraints = []
         else:
             self.constraints = eval(args_tune['constraints'])
-        self.setup_configuration_space()
+
+        self.knob_config_file = args_db['knob_config_file']
+        self.config_space = self.setup_configuration_space(self.knob_config_file, int(args_db['knob_num']))
         self.setup_transfer()
 
 
-    def setup_configuration_space(self):
-        KNOBS = self.env.knobs_detail
+    def setup_configuration_space(self, knob_config_file, knob_num):
+        KNOBS = initialize_knobs(knob_config_file, knob_num)
         knobs_list = []
+        config_space = ConfigurationSpace()
 
         for name in KNOBS.keys():
             value = KNOBS[name]
@@ -42,7 +45,7 @@ class DBTuner:
                 knob = CategoricalHyperparameter(name, [str(i) for i in value["enum_values"]], default_value= str(value['default']))
             elif knob_type == 'integer':
                 min_val, max_val = value['min'], value['max']
-                if self.env.knobs_detail[name]['max'] > sys.maxsize:
+                if KNOBS[name]['max'] > sys.maxsize:
                     knob = UniformIntegerHyperparameter(name, int(min_val / 1000), int(max_val / 1000),
                                                         default_value=int(value['default'] / 1000))
                 else:
@@ -55,7 +58,23 @@ class DBTuner:
 
             knobs_list.append(knob)
 
-        self.config_space.add_hyperparameters(knobs_list)
+
+        config_space.add_hyperparameters(knobs_list)
+
+        return config_space
+
+    def load_history(self):
+        files = os.listdir(self.hc_path)
+        config_space = self.setup_configuration_space(self.knob_config_file, -1)
+        for f in files:
+            try:
+                task_id = f.split('.')[0]
+                fn = os.path.join(self.hc_path, f)
+                history_container = HistoryContainer(task_id, config_space=config_space)
+                history_container.load_history_from_json(fn)
+                self.hcL.append(history_container)
+            except:
+                logger.info('load history failed for {}'.format(f))
 
     def setup_transfer(self):
         if self.transfer_framework == 'none':
@@ -67,17 +86,7 @@ class DBTuner:
                 self.surrogate_type = 'auto'
 
         elif self.transfer_framework in ['workload_map', 'rgpe']:
-            files = os.listdir(self.hc_path)
-            for f in files:
-                try:
-                    task_id = f.split('.')[0].split('_')[-1]
-                    fn = os.path.join(self.hc_path, f)
-                    history_container = HistoryContainer(task_id, config_space=self.config_space)
-                    history_container.load_history_from_json(fn)
-                    self.hcL.append(history_container)
-                except:
-                    logger.info('load history failed for {}'.format(f))
-
+            self.load_history()
             if self.method == 'SMAC':
                 method = 'prf'
             elif self.method == 'MBO':
@@ -104,6 +113,9 @@ class DBTuner:
         else:
             raise ValueError('Invalid string %s for transfer framework!' % self.transfer_framework)
 
+        if self.space_transfer and len(self.hcL)==0:
+            self.load_history()
+
 
     def tune(self):
         bo = PipleLine(self.env.step,
@@ -129,6 +141,7 @@ class DBTuner:
                        mean_var_file=self.args_tune['mean_var_file'],
                        batch_size=int(self.args_tune['batch_size']),
                        params=self.model_params_path,
+                       space_transfer=self.space_transfer
                        )
 
         history = bo.run()

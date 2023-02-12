@@ -60,6 +60,22 @@ def impute_default_values(
 
     return configs_array
 
+
+def impute_incumb_values(
+        configurations: Configuration,
+        incumbent: Configuration):
+
+    configurations_ = list()
+    for configuration in configurations:
+        knob_dict = configuration.get_dictionary()
+        for knob in incumbent.keys():
+            if not knob in knob_dict.keys():
+                knob_dict[knob] = incumbent[knob]
+        configurations_.append(Configuration(incumbent.configuration_space, values=knob_dict))
+
+    return configurations_
+
+
 def config2df(configs):
     config_dic = defaultdict(list)
     for config in configs:

@@ -76,6 +76,18 @@ class AbstractAcquisitionFunction(object, metaclass=abc.ABCMeta):
         np.ndarray(N, 1)
             acquisition values for X
         """
+
+        if  hasattr(self, 'compact_space') and  not self.compact_space  == None:
+            configurations_ = list()
+            for configuration in configurations:
+                knob_dict = configuration.get_dictionary()
+                for knob in self.incumbent.keys():
+                    if not knob in knob_dict.keys():
+                        knob_dict[knob] = self.incumbent[knob]
+                configurations_.append(Configuration(self.incumbent.configuration_space, values=knob_dict))
+
+            configurations = configurations_
+
         if convert:
             X = convert_configurations_to_array(configurations)
         else:

@@ -141,6 +141,11 @@ class AcquisitionFunctionMaximizer(object, metaclass=abc.ABCMeta):
         return [(acq_values[ind][0], configs[ind]) for ind in indices[::-1]]
 
 
+    def set_compact_space(self, space):
+        self.config_space = space
+
+
+
 class CMAESOptimizer(AcquisitionFunctionMaximizer):
     def __init__(
             self,
@@ -240,6 +245,7 @@ class LocalSearch(AcquisitionFunctionMaximizer):
         super().__init__(acquisition_function, config_space, rng)
         self.max_steps = max_steps
         self.n_steps_plateau_walk = n_steps_plateau_walk
+
 
     def _maximize(
             self,
@@ -515,7 +521,6 @@ class InterleavedLocalAndRandomSearch(AcquisitionFunctionMaximizer):
         Iterable[Configuration]
             to be concrete: ~autotune.ei_optimization.ChallengerList
         """
-
         next_configs_by_local_search = self.local_search._maximize(
             runhistory, self.n_sls_iterations, **kwargs
         )
@@ -557,6 +562,12 @@ class InterleavedLocalAndRandomSearch(AcquisitionFunctionMaximizer):
             **kwargs
     ) -> Iterable[Tuple[float, Configuration]]:
         raise NotImplementedError()
+
+    def set_compact_space(self, space):
+        self.config_space = space
+        self.random_search.set_compact_space(space)
+        self.local_search.set_compact_space(space)
+
 
 
 class ScipyOptimizer(AcquisitionFunctionMaximizer):
