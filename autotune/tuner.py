@@ -60,7 +60,6 @@ class DBTuner:
 
 
         config_space.add_hyperparameters(knobs_list)
-
         return config_space
 
     def load_history(self):
@@ -141,7 +140,8 @@ class DBTuner:
                        mean_var_file=self.args_tune['mean_var_file'],
                        batch_size=int(self.args_tune['batch_size']),
                        params=self.model_params_path,
-                       space_transfer=self.space_transfer
+                       space_transfer=self.space_transfer,
+                       knob_config_file=self.knob_config_file
                        )
 
         history = bo.run()

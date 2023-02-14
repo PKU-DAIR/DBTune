@@ -23,7 +23,7 @@ Perf = collections.namedtuple(
     'perf', ['cost', 'time', 'status', 'additional_info'])
 
 Observation = collections.namedtuple(
-    'Observation', ['config', 'trial_state', 'constraints', 'objs', 'elapsed_time', 'EM', 'IM', 'resource', 'info', 'context'])
+    'Observation', ['config', 'trial_state', 'constraints', 'objs', 'elapsed_time',  'iter_time','EM', 'IM', 'resource', 'info', 'context'])
 
 
 def detect_valid_history_file(dir):
@@ -74,6 +74,7 @@ class HistoryContainer(object):
         self.constraint_perfs = list()  # all constraints
         self.trial_states = list()  # all trial states
         self.elapsed_times = list()  # all elapsed times
+        self.iter_times = list()
         self.external_metrics = list() # all external metrics
         self.internal_metrics = list() # all internal metrics
         self.resource = list() # all resource information
@@ -110,6 +111,7 @@ class HistoryContainer(object):
         constraints = observation.constraints
         trial_state = observation.trial_state
         elapsed_time = observation.elapsed_time
+        iter_time = observation.iter_time
         internal_metrics = observation.IM
         external_metrics = observation.EM
         resource = observation.resource
@@ -130,6 +132,7 @@ class HistoryContainer(object):
         self.trial_states.append(trial_state)
         self.constraint_perfs.append(constraints)  # None if no constraint
         self.elapsed_times.append(elapsed_time)
+        self.iter_times.append(iter_time)
         self.internal_metrics.append(internal_metrics)
         self.external_metrics.append(external_metrics)
         self.resource.append(resource)
@@ -259,7 +262,8 @@ class HistoryContainer(object):
                 'internal_metrics': self.internal_metrics[i],
                 'resource': self.resource[i],
                 'trial_state': self.trial_states[i],
-                'elapsed_time': self.elapsed_times[i]
+                'elapsed_time': self.elapsed_times[i],
+                'iter_time': self.iter_times[i]
             }
             data.append(tmp)
 
@@ -309,12 +313,14 @@ class HistoryContainer(object):
             resource = tmp['resource']
             trial_state = tmp['trial_state']
             elapsed_time = tmp['elapsed_time']
+            iter_time = tmp['iter_time'] if 'iter_time' in tmp.keys() else tmp['elapsed_time']
             res = dict(em, **resource)
 
             self.configurations.append(config)
             self.configurations_all.append(self.fill_default_value(config))
             self.trial_states.append(trial_state)
             self.elapsed_times.append(elapsed_time)
+            self.iter_times.append(iter_time)
             self.internal_metrics.append(im)
             self.external_metrics.append(em)
             self.resource.append(resource)
@@ -573,7 +579,7 @@ class HistoryContainer(object):
         lgbr = LGBMRegressor()
         lgbr.fit(X, Y)
         explainer = shap.TreeExplainer(lgbr)
-        X_selected = X[Y>=self.get_deafult_performance()]
+        X_selected = X[Y>=self.get_default_performance()]
         if X_selected.shape[0] == 0:
             X_selected = X[Y >= np.quantile(Y, 0.9)]
 
@@ -649,7 +655,7 @@ class HistoryContainer(object):
                                 true_minimum, **kwargs)
 
 
-    def get_deafult_performance(self):
+    def get_default_performance(self):
         default_array = self.config_space.get_default_configuration().get_array()
         default_list = list()
         for i,config in enumerate(self.configurations):
@@ -657,20 +663,18 @@ class HistoryContainer(object):
                 default_list.append(self.get_transformed_perfs()[i])
 
         if not len(default_list):
-            pdb.set_trace()
-            self.logger.info("None default configuration evaluated!")
-            return 0
+            return self.get_transformed_perfs()[0]
         else:
             return  sum(default_list)/len(default_list)
 
     def get_promising_space(self, quantile_threshold=0):
         y = - self.get_transformed_perfs()
         if quantile_threshold == 0:
-            performance_threshold = - self.get_deafult_performance()
+            performance_threshold = - self.get_default_performance()
         else:
             performance_threshold = np.quantile(y, quantile_threshold)
-            if performance_threshold <  - self.get_deafult_performance():
-                performance_threshold = - self.get_deafult_performance()
+            if performance_threshold <  - self.get_default_performance():
+                performance_threshold = - self.get_default_performance()
 
         X = convert_configurations_to_array(self.configurations)
 
@@ -688,7 +692,8 @@ class HistoryContainer(object):
                     value = good_values[t]
                     true_value = Configuration(self.config_space, vector=X[X[:, j] == value][0])[config]
                     true_values.append(true_value)
-                pruned_space[config] = (true_values, None, importances[config] / abs(self.get_deafult_performance()))
+
+                pruned_space[config] = (true_values, None, importances[config] / abs(self.get_default_performance()))
                 continue
 
             p_good_max = X_good[:, j].max()
@@ -703,8 +708,7 @@ class HistoryContainer(object):
                 p_min = p_good_min
             else:
                 p_min = max(smaller_set)
-            pruned_space[config] = (p_min, p_max, importances[config] / abs(self.get_deafult_performance()))
-
+            pruned_space[config] = (p_min, p_max, importances[config] / abs(self.get_default_performance()))
 
         return pruned_space
 

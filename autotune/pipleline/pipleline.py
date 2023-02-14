@@ -24,6 +24,7 @@ from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
 from autotune.utils.limit import time_limit, TimeoutException, no_time_limit_func
 from autotune.utils.util_funcs import get_result
 from autotune.utils.config_space import ConfigurationSpace
+from autotune.utils.config_space.space_utils import estimate_size
 from autotune.selector.selector import KnobSelector
 from autotune.optimizer.surrogate.core import build_surrogate, surrogate_switch
 from autotune.optimizer.core import build_acq_func, build_optimizer
@@ -66,6 +67,7 @@ class PipleLine(BOBase):
                  num_hps_init=5,
                  num_metrics=65,
                  space_transfer=False,
+                 knob_config_file= None,
                  advisor_kwargs: dict = None,
                  **kwargs
                  ):
@@ -92,8 +94,12 @@ class PipleLine(BOBase):
         self.selector = KnobSelector(self.selector_type)
         self.current_context = None
         self.space_transfer = space_transfer
+        self.knob_config_file = knob_config_file
+        if space_transfer:
+            self.space_step_limit = 3
+            self.space_step = 0
+        self.logger.info("Total space size:{}".format(estimate_size(self.config_space, self.knob_config_file)))
         advisor_kwargs = advisor_kwargs or {}
-
         # init history container
         if self.num_objs == 1:
             self.history_container = HistoryContainer(task_id=self.task_id,
@@ -178,15 +184,40 @@ class PipleLine(BOBase):
 
 
     def run(self):
+        previous_objs = 1e9
+        compact_space = None
         for _ in tqdm(range(self.iteration_id, self.max_iterations)):
             if self.budget_left < 0:
                 self.logger.info('Time %f elapsed!' % self.runtime_limit)
                 break
+
             start_time = time.time()
-            self.iterate()
+            self.iter_begin_time = start_time
+            # get another compace space
+            self.logger.info((self.space_step , self.space_step_limit))
+            if self.space_transfer and self.space_step >= self.space_step_limit:
+                self.space_step_limit = 3
+                self.space_step = 0
+                compact_space = self.get_compact_space()
+
+            if self.space_transfer:
+                space = compact_space if not compact_space is None else self.config_space
+                self.logger.info("[Iteration {}] Total space size:{}".format(self.iteration_id, estimate_size(space, self.knob_config_file)))
+
+            _ , _, _, objs = self.iterate(compact_space)
+
+            # determine whether explore one more step in the space
+            if self.space_transfer and objs[0] < previous_objs:
+                previous_objs = objs[0]
+                if  self.space_step >= 1:
+                    self.space_step_limit += 1
+
             self.save_history()
             runtime = time.time() - start_time
             self.budget_left -= runtime
+            # recode the step in the space
+            if self.space_transfer:
+                self.space_step += 1
 
         return self.get_history()
 
@@ -245,15 +276,11 @@ class PipleLine(BOBase):
                     self.history_container.alter_configuration_space(new_config_space)
                     self.config_space = new_config_space
 
-    def iterate(self):
+    def iterate(self, compact_space=None):
         self.knob_selection()
-        compact_space = None
-        if self.space_transfer and self.iteration_id > 1 and self.iteration_id % 3 == 0:
-            compact_space = self.get_compact_space()
         # get configuration suggestion
         config = self.optimizer.get_suggestion(history_container=self.history_container, compact_space=compact_space)
         _, trial_state, constraints, objs = self.evaluate(config)
-
         return config, trial_state, constraints, objs
 
     def save_history(self):
@@ -284,18 +311,18 @@ class PipleLine(BOBase):
         start_time = time.time()
 
         objs, constraints, em, resource, im, info, trial_state = self.objective_function(config)
-
         if trial_state == FAILED :
             objs = self.FAILED_PERF
 
         elapsed_time = time.time() - start_time
+        iter_time = time.time() - start_time
 
         if self.surrogate_type == 'context_prf' and config == self.history_container.config_space.get_default_configuration():
             self.reset_context(np.array(im))
 
         observation = Observation(
             config=config, objs=objs, constraints=constraints,
-            trial_state=trial_state, elapsed_time=elapsed_time, EM=em, resource=resource, IM=im, info=info, context=self.current_context
+            trial_state=trial_state, elapsed_time=elapsed_time, iter_time=iter_time, EM=em, resource=resource, IM=im, info=info, context=self.current_context
         )
         self.history_container.update_observation(observation)
 
@@ -361,7 +388,7 @@ class PipleLine(BOBase):
             quantile = quantile_max - (1 - 2 * max(similarity_list[j] - 0.5, 0)) * (quantile_max - quantile_min)
             ys_source = - self.history_bo_data[j].get_transformed_perfs()
             performance_threshold = np.quantile(ys_source, quantile)
-            default_performance = - self.history_bo_data[j].get_deafult_performance()
+            default_performance = - self.history_bo_data[j].get_default_performance()
             self.logger.info("[{}] similarity:{} default:{}, quantile:{}, threshold:{}".format(self.history_bo_data[j].task_id, similarity_list[j], default_performance, quantile, performance_threshold))
             if performance_threshold < default_performance:
                 quantile = 0
@@ -379,7 +406,7 @@ class PipleLine(BOBase):
         # remove unimportant knobs
         important_knobs = list()
         for key in important_dict.keys():
-            if important_dict[key] >= 1/3:
+            if important_dict[key] >= 0:
                 important_knobs.append(key)
 
         # generate target pruned space
@@ -401,12 +428,13 @@ class PipleLine(BOBase):
                     if values_dict[v] > 1/3:
                         feasible_value.append(v)
 
-                default = self.config_space.get_default_configuration()[knob]
-                if not default in feasible_value:
-                    default = feasible_value[0]
+                if len(feasible_value) > 1:
+                    default = self.config_space.get_default_configuration()[knob]
+                    if not default in feasible_value:
+                        default = feasible_value[0]
 
-                knob_add = CategoricalHyperparameter(knob, feasible_value, default_value=default)
-                target_space.add_hyperparameter(knob_add)
+                    knob_add = CategoricalHyperparameter(knob, feasible_value, default_value=default)
+                    target_space.add_hyperparameter(knob_add)
                 continue
 
             # Integer

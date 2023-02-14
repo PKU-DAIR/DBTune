@@ -4,6 +4,7 @@ import re
 import numpy as np
 from typing import List
 from autotune.utils.config_space import Configuration, ConfigurationSpace
+from autotune.knobs import  initialize_knobs
 from ConfigSpace import ConfigurationSpace, UniformIntegerHyperparameter, UniformFloatHyperparameter, \
     CategoricalHyperparameter, Constant
 from ConfigSpace import EqualsCondition, InCondition
@@ -211,3 +212,21 @@ def get_config_space_from_dict(space_dict: dict):
 
         cs.add_hyperparameter(param)
     return cs
+
+def estimate_size(space, configfile):
+    KNOBS = initialize_knobs(configfile, -1)
+
+    sizes = []
+    for hp in space._hyperparameters.values():
+        name = hp.name
+        if KNOBS[name]['type'] == 'enum':
+            sizes.append(hp.get_size())
+        else:
+            sizes.append( hp.get_size()/(KNOBS[name]['max'] - KNOBS[name]['min']) * 10)
+    if len(sizes) == 0:
+        return 0.0
+    else:
+        size = sizes[0]
+        for i in range(1, len(sizes)):
+            size = size * sizes[i]
+        return size
