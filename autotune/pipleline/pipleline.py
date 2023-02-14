@@ -98,6 +98,7 @@ class PipleLine(BOBase):
         if space_transfer:
             self.space_step_limit = 3
             self.space_step = 0
+
         self.logger.info("Total space size:{}".format(estimate_size(self.config_space, self.knob_config_file)))
         advisor_kwargs = advisor_kwargs or {}
         # init history container
@@ -194,11 +195,12 @@ class PipleLine(BOBase):
             start_time = time.time()
             self.iter_begin_time = start_time
             # get another compace space
-            self.logger.info((self.space_step , self.space_step_limit))
+            if self.space_transfer:
+                self.logger.info((self.space_step , self.space_step_limit))
             if self.space_transfer and self.space_step >= self.space_step_limit:
                 self.space_step_limit = 3
                 self.space_step = 0
-                compact_space = self.get_compact_space()
+                compact_space = self.ompact_space()
 
             if self.space_transfer:
                 space = compact_space if not compact_space is None else self.config_space
@@ -260,7 +262,7 @@ class PipleLine(BOBase):
                     self.config_space = new_config_space
 
             elif self.incremental == 'decrease':
-                num_hps = self.num_hps_init - incremental_step * self.incremental_every
+                num_hps = self.num_hps_init * 0.6#- incremental_step * self.incremental_every
                 num_hps = max(num_hps, 1)
 
                 new_config_space = ConfigurationSpace()

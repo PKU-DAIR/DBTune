@@ -222,7 +222,11 @@ def estimate_size(space, configfile):
         if KNOBS[name]['type'] == 'enum':
             sizes.append(hp.get_size())
         else:
-            sizes.append( hp.get_size()/(KNOBS[name]['max'] - KNOBS[name]['min']) * 10)
+            if KNOBS[name]['max'] - KNOBS[name]['min'] > 10000:
+                size = hp.get_size()/(KNOBS[name]['max'] - KNOBS[name]['min']) * 10000
+                if size < 1:
+                    size = 1
+                sizes.append(size )
     if len(sizes) == 0:
         return 0.0
     else:
