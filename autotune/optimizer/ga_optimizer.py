@@ -60,7 +60,7 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
         all_perfs = history_container.get_all_perfs()
         self.all_configs = set(all_configs)
 
-        num_config_evaluated = len(history_container.configurations)
+        num_config_evaluated = len(all_perfs)
         for i in range(num_config_evaluated):
             self.population.append(dict(config=all_configs[i], age=self.age, perf=all_perfs[i]))
             self.age += 1

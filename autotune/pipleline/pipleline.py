@@ -224,29 +224,6 @@ class PipleLine(BOBase):
                                   )
             self.optimizer_list = [SMAC, MBO, DDPG, GA]
 
-        self.update_model_use_data_loaded()
-
-
-    def update_model_use_data_loaded(self):
-        if self.optimizer_type in ['GA', 'TurBO', 'DDPG'] or self.auto_optimizer:
-            for i in range(len(self.history_container.configurations)):
-                if self.num_objs == 1:
-                    objs = [self.history_container.perfs[i]]
-                observation = Observation(config=self.history_container.configurations[i],
-                                          objs=objs,
-                                          constraints=self.history_container.constraint_perfs,
-                                          trial_state=self.history_container.trial_states[i],
-                                          elapsed_time=self.history_container.elapsed_times[i],
-                                          iter_time=self.history_container.iter_times[i],
-                                          EM=self.history_container.external_metrics[i],
-                                          resource=self.history_container.resource[i],
-                                          IM=self.history_container.internal_metrics[i],
-                                          info=self.history_container.info, context=self.history_container.contexts[i])
-                if not self.auto_optimizer:
-                    self.optimizer.update(observation)
-                else:
-                    self.optimizer_list[2].update(observation)
-                    self.optimizer_list[3].update(observation)
 
     def get_history(self):
         return self.history_container
@@ -468,7 +445,7 @@ class PipleLine(BOBase):
         quantile_min = 1 / 1e9
         quantile_max = 1 - 1 / 1e9
         for j in range(len(surrogate_list)):
-            if not j in sample_list:
+            if not j in sample_list and not j == len(surrogate_list) - 1:
                 continue
             quantile = quantile_max - (1 - 2 * max(similarity_list[j] - 0.5, 0)) * (quantile_max - quantile_min)
             ys_source = - surrogate_list[j].get_transformed_perfs()

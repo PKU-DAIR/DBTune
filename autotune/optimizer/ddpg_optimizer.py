@@ -73,19 +73,36 @@ class DDPG_Optimizer:
         self.score = 0
         self.episode_init = True
         create_output_folders()
+        self.initialize(history_container)
 
+    def initialize(self, history_container):
         if self.mean_var_file != '' and os.path.exists(self.mean_var_file):
             with open(self.mean_var_file, 'rb') as f:
                 self.state_mean = pickle.load(f)
                 self.state_var = pickle.load(f)
+                self.logger.info('Load state mean and var.')
         else:
             for im in history_container.internal_metrics:
                 self.internal_metrics.append(im)
             if len(self.internal_metrics) >= self.init_num:
                 self.gen_mean_var()
 
-        if not self.create_model():
-            self.logger.info('Calculate state mean and var.')
+        if self.create_model():
+            for i in range(len(history_container.configurations)):
+                objs = [history_container.perfs[i]]
+
+                observation = Observation(config=history_container.configurations[i],
+                                      objs=objs,
+                                      constraints=history_container.constraint_perfs,
+                                      trial_state=history_container.trial_states[i],
+                                      elapsed_time=history_container.elapsed_times[i],
+                                      iter_time=history_container.iter_times[i],
+                                      EM=history_container.external_metrics[i],
+                                      resource=history_container.resource[i],
+                                      IM=history_container.internal_metrics[i],
+                                      info=history_container.info, context=history_container.contexts[i])
+                self.update(observation)
+
 
     def create_model(self):
         if (self.state_mean is None) or (self.state_var is None):
@@ -121,6 +138,8 @@ class DDPG_Optimizer:
         with open(self.mean_var_file, 'wb') as f:
             pickle.dump(self.state_mean, f)
             pickle.dump(self.state_var, f)
+
+        self.logger.info('Calculate state mean and var.')
 
     def get_suggestion(self, history_container=None, compact_space=None):
         if self.model is None:
