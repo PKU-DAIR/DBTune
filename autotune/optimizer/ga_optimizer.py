@@ -78,7 +78,7 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
             else:
                 raise ValueError('Unknown strategy: %s' % self.strategy)
 
-    def get_suggestion(self, history_container: HistoryContainer):
+    def get_suggestion(self, history_container: HistoryContainer, compact_space=None):
         """
         Generate a configuration (suggestion) for this query.
         Returns
@@ -107,8 +107,6 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
             if next_config is None:  # If all the neighors are evaluated, sample randomly!
                 next_config = self.sample_random_config(excluded_configs=self.all_configs)
 
-        self.all_configs.add(next_config)
-        self.running_configs.append(next_config)
         return next_config
 
     def update(self, observation: Observation):
@@ -125,8 +123,8 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
         perf = observation.objs[0]
         trial_state = observation.trial_state
 
-        assert config in self.running_configs
-        self.running_configs.remove(config)
+        self.all_configs.add(config)
+
 
         # update population
         if trial_state == SUCCESS and perf < MAXINT:

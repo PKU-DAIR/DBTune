@@ -261,6 +261,7 @@ class HistoryContainer(object):
                 'external_metrics': self.external_metrics[i],
                 'internal_metrics': self.internal_metrics[i],
                 'resource': self.resource[i],
+                'context': self.contexts[i],
                 'trial_state': self.trial_states[i],
                 'elapsed_time': self.elapsed_times[i],
                 'iter_time': self.iter_times[i]
@@ -314,6 +315,7 @@ class HistoryContainer(object):
             trial_state = tmp['trial_state']
             elapsed_time = tmp['elapsed_time']
             iter_time = tmp['iter_time'] if 'iter_time' in tmp.keys() else tmp['elapsed_time']
+            context = tmp['context'] if 'context' in tmp.keys() else None
             res = dict(em, **resource)
 
             self.configurations.append(config)
@@ -324,6 +326,7 @@ class HistoryContainer(object):
             self.internal_metrics.append(im)
             self.external_metrics.append(em)
             self.resource.append(resource)
+            self.contexts.append(context)
 
             objs = self.get_objs(res, y_variables)
             if self.num_objs == 1:

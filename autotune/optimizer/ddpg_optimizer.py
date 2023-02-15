@@ -3,7 +3,8 @@ import numpy as np
 import os
 import math
 import pickle
-
+import pdb
+import copy
 from autotune.optimizer.surrogate.ddpg.ddpg import DDPG
 from autotune.utils.history_container import Observation, HistoryContainer
 from autotune.utils.config_space import Configuration, CategoricalHyperparameter
@@ -15,6 +16,27 @@ def create_output_folders():
     for folder in output_folders:
         if not os.path.exists(folder):
             os.mkdir(folder)
+
+
+def config2action(config, config_space):
+    action = copy.deepcopy(config.get_array())
+    keys = config_space.get_hyperparameter_names()
+    for key in keys:
+        if type(config_space.get_hyperparameters_dict()[key]) == CategoricalHyperparameter:
+            action[keys.index(key)] = action[keys.index(key)] / (config_space.get_hyperparameters_dict()[key].num_choices - 1)
+
+    return action
+
+def action2config(action, config_space):
+    keys = config_space.get_hyperparameter_names()
+    knob_dict = dict()
+    for i, key in enumerate(keys):
+        transform = config_space.get_hyperparameters_dict()[key]._transform
+        if type(config_space.get_hyperparameters_dict()[key]) == CategoricalHyperparameter:
+            action[i] = np.round( action[i] * (config_space.get_hyperparameters_dict()[key].num_choices - 1))
+        knob_dict[key] = transform(action[i])
+
+    return Configuration(config_space, values=knob_dict)
 
 
 class DDPG_Optimizer:
@@ -100,7 +122,7 @@ class DDPG_Optimizer:
             pickle.dump(self.state_mean, f)
             pickle.dump(self.state_var, f)
 
-    def get_suggestion(self, history_container=None):
+    def get_suggestion(self, history_container=None, compact_space=None):
         if self.model is None:
             init_config = self.initial_configurations[self.init_step]
             self.init_step += 1
@@ -109,13 +131,6 @@ class DDPG_Optimizer:
         if self.episode_init:
             self.t = 0
             self.score = 0
-            action = self.config_space.get_default_configuration().get_array()
-            keys = self.config_space.get_hyperparameter_names()
-            for key in keys:
-                if type(self.config_space.get_hyperparameters_dict()[key]) == CategoricalHyperparameter:
-                    action[keys.index(key)] = action[keys.index(key)] / (
-                            self.config_space.get_hyperparameters_dict()[key].num_choices - 1)
-            self.action = action
             return self.config_space.get_default_configuration()
 
         if np.random.random() < 0.7:  # avoid too nus reward in the fisrt 100 step
@@ -123,15 +138,7 @@ class DDPG_Optimizer:
         else:
             X_next = self.model.choose_action(self.state, 1)
 
-        self.action = X_next
-
-        keys = self.config_space.get_hyperparameter_names()
-        for key in keys:
-            if type(self.config_space.get_hyperparameters_dict()[key]) == CategoricalHyperparameter:
-                X_next[keys.index(key)] = np.round(
-                    X_next[keys.index(key)] * (self.config_space.get_hyperparameters_dict()[key].num_choices - 1))
-
-        return Configuration(self.config_space, vector=X_next.reshape(-1, 1))
+        return action2config(X_next, self.config_space)
 
     def update(self, observation: Observation):
         if self.model is None:
@@ -165,7 +172,7 @@ class DDPG_Optimizer:
         if done or self.score < -50:
             self.episode_init = True
 
-        self.model.add_sample(self.state, self.action, reward, next_state, done)
+        self.model.add_sample(self.state, config2action(observation.config, self.config_space), reward, next_state, done)
         self.state = next_state
 
         if len(self.model.replay_memory) > self.batch_size:

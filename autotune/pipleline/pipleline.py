@@ -31,7 +31,9 @@ from autotune.optimizer.core import build_acq_func, build_optimizer
 from autotune.transfer.tlbo.rgpe import RGPE
 from autotune.utils.util_funcs import check_random_state
 from autotune.utils.config_space import ConfigurationSpace, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
-
+from autotune.optimizer.ga_optimizer import GA_Optimizer
+from autotune.optimizer.bo_optimizer import BO_Optimizer
+from autotune.optimizer.ddpg_optimizer import DDPG_Optimizer
 import pdb
 from autotune.knobs import ts, logger
 
@@ -67,7 +69,8 @@ class PipleLine(BOBase):
                  num_hps_init=5,
                  num_metrics=65,
                  space_transfer=False,
-                 knob_config_file= None,
+                 knob_config_file=None,
+                 auto_optimizer=False,
                  advisor_kwargs: dict = None,
                  **kwargs
                  ):
@@ -95,11 +98,12 @@ class PipleLine(BOBase):
         self.current_context = None
         self.space_transfer = space_transfer
         self.knob_config_file = knob_config_file
+        self.auto_optimizer = auto_optimizer
         if space_transfer:
             self.space_step_limit = 3
             self.space_step = 0
 
-        self.logger.info("Total space size:{}".format(estimate_size(self.config_space, self.knob_config_file)))
+        self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/data2/ruike/DBTune/scripts/experiment/gen_knobs/mysql_all_197_32G.json')))
         advisor_kwargs = advisor_kwargs or {}
         # init history container
         if self.num_objs == 1:
@@ -114,68 +118,135 @@ class PipleLine(BOBase):
                                                         ref_point=ref_point)
         # load history container if exists
         self.load_history()
+        if not self.auto_optimizer:
+            if optimizer_type in ('MBO', 'SMAC', 'auto') or self.method_selection:
+                self.optimizer = BO_Optimizer(config_space,
+                                              self.history_container,
+                                              num_objs=self.num_objs,
+                                              num_constraints=num_constraints,
+                                              initial_trials=initial_runs,
+                                              init_strategy=init_strategy,
+                                              initial_configurations=initial_configurations,
+                                              surrogate_type=surrogate_type,
+                                              acq_type=acq_type,
+                                              acq_optimizer_type=acq_optimizer_type,
+                                              ref_point=ref_point,
+                                              history_bo_data=history_bo_data,
+                                              random_state=random_state,
+                                              **advisor_kwargs)
 
-        if optimizer_type in ('MBO', 'SMAC', 'auto'):
-            from autotune.optimizer.bo_optimizer import BO_Optimizer
-            self.optimizer = BO_Optimizer(config_space,
-                                          self.history_container,
-                                          num_objs=self.num_objs,
-                                          num_constraints=num_constraints,
-                                          initial_trials=initial_runs,
-                                          init_strategy=init_strategy,
-                                          initial_configurations=initial_configurations,
-                                          surrogate_type=surrogate_type,
-                                          acq_type=acq_type,
-                                          acq_optimizer_type=acq_optimizer_type,
-                                          ref_point=ref_point,
-                                          history_bo_data=history_bo_data,
-                                          random_state=random_state,
-                                          **advisor_kwargs)
-        elif optimizer_type == 'TPE':
-            assert self.num_objs == 1 and num_constraints == 0
+            elif optimizer_type == 'TPE':
+                assert self.num_objs == 1 and num_constraints == 0
 
-            from autotune.optimizer.tpe_optimizer import TPE_Optimizer
-            self.optimizer = TPE_Optimizer(config_space,
-                                           **advisor_kwargs)
-        elif optimizer_type == 'GA':
-            assert self.num_objs == 1 and num_constraints == 0
-            assert self.incremental == 'none'
-
-            from autotune.optimizer.ga_optimizer import GA_Optimizer
-            self.optimizer = GA_Optimizer(config_space,
-                                          self.history_container,
-                                          num_objs=self.num_objs,
-                                          num_constraints=num_constraints,
-                                          optimization_strategy=sample_strategy,
-                                          output_dir=logging_dir,
-                                          random_state=random_state,
-                                          **advisor_kwargs)
-        elif optimizer_type == 'TurBO':
-            # TODO: assertion? warm start?
-            assert self.num_objs == 1 and num_constraints == 0
-            assert self.incremental == 'none'
-
-            from autotune.optimizer.turbo_optimizer import TURBO_Optimizer
-            self.optimizer = TURBO_Optimizer(config_space,
-                                             initial_trials=initial_runs,
-                                             init_strategy=init_strategy,
-                                             **advisor_kwargs)
-        elif optimizer_type == 'DDPG':
-            assert self.num_objs == 1 and num_constraints == 0
-            assert self.incremental == 'none'
-
-            from autotune.optimizer.ddpg_optimizer import DDPG_Optimizer
-            self.optimizer = DDPG_Optimizer(config_space,
-                                            self.history_container,
-                                            knobs_num=self.num_hps_init,
-                                            metrics_num=num_metrics,
-                                            task_id=task_id,
-                                            params=kwargs['params'],
-                                            batch_size=kwargs['batch_size'],
-                                            mean_var_file=kwargs['mean_var_file']
-                                            )
+                from autotune.optimizer.tpe_optimizer import TPE_Optimizer
+                self.optimizer = TPE_Optimizer(config_space,
+                                               **advisor_kwargs)
+            elif optimizer_type == 'GA':
+                assert self.num_objs == 1 and num_constraints == 0
+                assert self.incremental == 'none'
+                self.optimizer = GA_Optimizer(config_space,
+                                              self.history_container,
+                                              num_objs=self.num_objs,
+                                              num_constraints=num_constraints,
+                                              optimization_strategy=sample_strategy,
+                                              output_dir=logging_dir,
+                                              random_state=random_state,
+                                              **advisor_kwargs)
+            elif optimizer_type == 'TurBO':
+                # TODO: assertion? warm start?
+                assert self.num_objs == 1 and num_constraints == 0
+                assert self.incremental == 'none'
+                from autotune.optimizer.turbo_optimizer import TURBO_Optimizer
+                self.optimizer = TURBO_Optimizer(config_space,
+                                                 initial_trials=initial_runs,
+                                                 init_strategy=init_strategy,
+                                                 **advisor_kwargs)
+            elif optimizer_type == 'DDPG':
+                assert self.num_objs == 1 and num_constraints == 0
+                assert self.incremental == 'none'
+                self.optimizer = DDPG_Optimizer(config_space,
+                                                self.history_container,
+                                                knobs_num=self.num_hps_init if not self.num_hps_init == -1 else len(self.config_space.get_hyperparameter_names()),
+                                                metrics_num=num_metrics,
+                                                task_id=task_id,
+                                                params=kwargs['params'],
+                                                batch_size=kwargs['batch_size'],
+                                                mean_var_file=kwargs['mean_var_file']
+                                                )
+            else:
+                raise ValueError('Invalid advisor type!')
         else:
-            raise ValueError('Invalid advisor type!')
+            SMAC = BO_Optimizer(config_space,
+                                self.history_container,
+                                num_objs=self.num_objs,
+                                num_constraints=num_constraints,
+                                initial_trials=initial_runs,
+                                init_strategy=init_strategy,
+                                initial_configurations=initial_configurations,
+                                surrogate_type='prf',
+                                acq_type=acq_type,
+                                acq_optimizer_type=acq_optimizer_type,
+                                ref_point=ref_point,
+                                history_bo_data=history_bo_data,
+                                random_state=random_state,
+                                **advisor_kwargs)
+            MBO = BO_Optimizer(config_space,
+                               self.history_container,
+                               num_objs=self.num_objs,
+                               num_constraints=num_constraints,
+                               initial_trials=initial_runs,
+                               init_strategy=init_strategy,
+                               initial_configurations=initial_configurations,
+                               surrogate_type='gp',
+                               acq_type=acq_type,
+                               acq_optimizer_type=acq_optimizer_type,
+                               ref_point=ref_point,
+                               history_bo_data=history_bo_data,
+                               random_state=random_state,
+                               **advisor_kwargs)
+
+            GA = GA_Optimizer(config_space,
+                              self.history_container,
+                              num_objs=self.num_objs,
+                              num_constraints=num_constraints,
+                              optimization_strategy=sample_strategy,
+                              output_dir=logging_dir,
+                              random_state=random_state,
+                              **advisor_kwargs)
+            DDPG = DDPG_Optimizer(config_space,
+                                  self.history_container,
+                                  knobs_num=self.num_hps_init if not self.num_hps_init == -1 else len(self.config_space.get_hyperparameter_names()),
+                                  metrics_num=num_metrics,
+                                  task_id=task_id,
+                                  params=kwargs['params'],
+                                  batch_size=kwargs['batch_size'],
+                                  mean_var_file=kwargs['mean_var_file']
+                                  )
+            self.optimizer_list = [SMAC, MBO, DDPG, GA]
+
+        self.update_model_use_data_loaded()
+
+
+    def update_model_use_data_loaded(self):
+        if self.optimizer_type in ['GA', 'TurBO', 'DDPG'] or self.auto_optimizer:
+            for i in range(len(self.history_container.configurations)):
+                if self.num_objs == 1:
+                    objs = [self.history_container.perfs[i]]
+                observation = Observation(config=self.history_container.configurations[i],
+                                          objs=objs,
+                                          constraints=self.history_container.constraint_perfs,
+                                          trial_state=self.history_container.trial_states[i],
+                                          elapsed_time=self.history_container.elapsed_times[i],
+                                          iter_time=self.history_container.iter_times[i],
+                                          EM=self.history_container.external_metrics[i],
+                                          resource=self.history_container.resource[i],
+                                          IM=self.history_container.internal_metrics[i],
+                                          info=self.history_container.info, context=self.history_container.contexts[i])
+                if not self.auto_optimizer:
+                    self.optimizer.update(observation)
+                else:
+                    self.optimizer_list[2].update(observation)
+                    self.optimizer_list[3].update(observation)
 
     def get_history(self):
         return self.history_container
@@ -185,7 +256,6 @@ class PipleLine(BOBase):
 
 
     def run(self):
-        previous_objs = 1e9
         compact_space = None
         for _ in tqdm(range(self.iteration_id, self.max_iterations)):
             if self.budget_left < 0:
@@ -197,10 +267,10 @@ class PipleLine(BOBase):
             # get another compace space
             if self.space_transfer:
                 self.logger.info((self.space_step , self.space_step_limit))
-            if self.space_transfer and self.space_step >= self.space_step_limit:
+            if self.space_transfer and (self.space_step >= self.space_step_limit):
                 self.space_step_limit = 3
                 self.space_step = 0
-                compact_space = self.ompact_space()
+                compact_space = self.get_compact_space()
 
             if self.space_transfer:
                 space = compact_space if not compact_space is None else self.config_space
@@ -209,10 +279,8 @@ class PipleLine(BOBase):
             _ , _, _, objs = self.iterate(compact_space)
 
             # determine whether explore one more step in the space
-            if self.space_transfer and objs[0] < previous_objs:
-                previous_objs = objs[0]
-                if  self.space_step >= 1:
-                    self.space_step_limit += 1
+            if self.space_transfer and  len(self.history_container.get_incumbents()) > 0 and objs[0] < self.history_container.get_incumbents()[0][1]:
+                self.space_step_limit += 1
 
             self.save_history()
             runtime = time.time() - start_time
@@ -278,8 +346,15 @@ class PipleLine(BOBase):
                     self.history_container.alter_configuration_space(new_config_space)
                     self.config_space = new_config_space
 
+    def select_optimizer(self):
+        idx = random.choices([i for i in range(len(self.optimizer_list))])[0]
+        self.logger.info("select {}".format(self.optimizer_list[idx]))
+        return self.optimizer_list[idx]
+
     def iterate(self, compact_space=None):
         self.knob_selection()
+        if self.auto_optimizer:
+            self.optimizer = self.select_optimizer()
         # get configuration suggestion
         config = self.optimizer.get_suggestion(history_container=self.history_container, compact_space=compact_space)
         _, trial_state, constraints, objs = self.evaluate(config)
@@ -300,7 +375,10 @@ class PipleLine(BOBase):
         else:
             self.history_container.load_history_from_json(fn)
             self.iteration_id = len(self.history_container.configurations)
+            if self.space_transfer:
+                self.space_step = self.space_step_limit
             self.logger.info('Load {} iterations from {}'.format(self.iteration_id, fn))
+
 
     def reset_context(self, context):
         self.current_context = context
@@ -331,6 +409,10 @@ class PipleLine(BOBase):
         if self.optimizer_type in ['GA', 'TurBO', 'DDPG']:
             self.optimizer.update(observation)
 
+        if self.auto_optimizer:
+            self.optimizer_list[2].update(observation)
+            self.optimizer_list[3].update(observation)
+
         self.iteration_id += 1
         # Logging.
         if self.num_constraints > 0:
@@ -346,16 +428,17 @@ class PipleLine(BOBase):
         if not hasattr(self, 'rgpe'):
             rng = check_random_state(100)
             seed = rng.randint(MAXINT)
-            self.rgpe = RGPE(self.config_space, self.history_bo_data, seed, num_src_hpo_trial=-1, only_source=True)
+            self.rgpe = RGPE(self.config_space, self.history_bo_data, seed, num_src_hpo_trial=-1, only_source=False)
 
-        rank_loss_list = self.rgpe.get_ranking_loss(self.history_container)[:-1]
+        rank_loss_list = self.rgpe.get_ranking_loss(self.history_container)
         similarity_list = [1 - i for i in rank_loss_list]
 
         ### filter unsimilar task
         sample_list = list()
         similarity_threhold = np.quantile(similarity_list, 0.5)
         candidate_list, weight = list(), list()
-        for i in range(len(self.history_bo_data)):
+        surrogate_list = self.history_bo_data + [self.history_container]
+        for i in range(len(surrogate_list)):
             if similarity_list[i] > similarity_threhold:
                 candidate_list.append(i)
                 weight.append(similarity_list[i] / sum(similarity_list))
@@ -365,10 +448,10 @@ class PipleLine(BOBase):
             return self.config_space
 
         ### determine the number of sampled task
-        if len(self.history_bo_data) > 60:
-            k = int(len(self.history_bo_data) / 15)
+        if len(surrogate_list) > 60:
+            k = int(len(surrogate_list) / 10)
         else:
-            k = 4
+            k = 6
 
         k = min(k, len(candidate_list))
 
@@ -384,18 +467,18 @@ class PipleLine(BOBase):
         pruned_space_list = list()
         quantile_min = 1 / 1e9
         quantile_max = 1 - 1 / 1e9
-        for j in range(len(self.history_bo_data)):
+        for j in range(len(surrogate_list)):
             if not j in sample_list:
                 continue
             quantile = quantile_max - (1 - 2 * max(similarity_list[j] - 0.5, 0)) * (quantile_max - quantile_min)
-            ys_source = - self.history_bo_data[j].get_transformed_perfs()
+            ys_source = - surrogate_list[j].get_transformed_perfs()
             performance_threshold = np.quantile(ys_source, quantile)
-            default_performance = - self.history_bo_data[j].get_default_performance()
-            self.logger.info("[{}] similarity:{} default:{}, quantile:{}, threshold:{}".format(self.history_bo_data[j].task_id, similarity_list[j], default_performance, quantile, performance_threshold))
+            default_performance = - surrogate_list[j].get_default_performance()
+            self.logger.info("[{}] similarity:{} default:{}, quantile:{}, threshold:{}".format(surrogate_list[j].task_id, similarity_list[j], default_performance, quantile, performance_threshold))
             if performance_threshold < default_performance:
                 quantile = 0
 
-            pruned_space = self.history_bo_data[j].get_promising_space(quantile)
+            pruned_space = surrogate_list[j].get_promising_space(quantile)
             pruned_space_list.append(pruned_space)
             total_imporve = sum([pruned_space[key][2] for key in list(pruned_space.keys())])
             for key in pruned_space.keys():

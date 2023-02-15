@@ -141,9 +141,8 @@ class DBTuner:
                        batch_size=int(self.args_tune['batch_size']),
                        params=self.model_params_path,
                        space_transfer=self.space_transfer,
-                       knob_config_file=self.knob_config_file
-                       )
-
+                       knob_config_file=self.knob_config_file,
+                       auto_optimizer=eval(self.args_tune['auto_optimizer']))
         history = bo.run()
         if history.num_objs == 1:
             import matplotlib.pyplot as plt
