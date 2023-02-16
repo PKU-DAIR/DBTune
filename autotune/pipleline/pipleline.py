@@ -349,7 +349,7 @@ class PipleLine(BOBase):
             return self.optimizer_list[idx]
 
         if self.iteration_id < self.init_num:
-            self.logger.info("select {}".format(self.optimizer_list[-1]))
+            self.logger.info("[random] select {}".format(self.optimizer_list[-1]))
             return self.optimizer_list[-1]
         
         # feature needed: smac, mbo, ddpg, ga, sysbench, twitter, tpch, target, knob_num, integer, enum, iteration
@@ -368,8 +368,10 @@ class PipleLine(BOBase):
             temp[i] = 1
             df.loc[len(df)] = temp + rank_loss_list + config_feature + [self.iteration_id]
 
-        pdb.set_trace()
-        self.ranker.predict(df)
+        rank = self.ranker.predict(df)
+        idx = np.argmin(rank)
+        self.logger.info("[learned] select {}".format(self.optimizer_list[idx]))
+        return self.optimizer_list[idx]
 
 
     def iterate(self, compact_space=None):

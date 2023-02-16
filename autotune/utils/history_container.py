@@ -216,7 +216,6 @@ class HistoryContainer(object):
 
         self.data[config] = perf
         self.data_all[self.fill_default_value(config)] = perf
-        self.config_counter += 1
 
         if len(self.incumbents) > 0:
             if perf < self.incumbent_value:
@@ -440,7 +439,7 @@ class HistoryContainer(object):
         configurations = []
         data = collections.OrderedDict()
 
-        for i in range(self.config_counter):
+        for i in range(len(self.configurations)):
             config = self.configurations_all[i]
             config_new = {}
             for name in names:
@@ -451,8 +450,7 @@ class HistoryContainer(object):
 
             c_new = Configuration(new_space, config_new)
             configurations.append(c_new)
-
-            perf = self.data_all[config]
+            perf = self.perfs[i]
             data[c_new] = perf
 
         self.configurations = configurations
