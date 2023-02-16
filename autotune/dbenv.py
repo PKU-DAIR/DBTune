@@ -267,7 +267,7 @@ class DBEnv:
             cpu, avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory, dirty_pages, hit_ratio, page_data)
 
     def step_GP(self, knobs, collect_resource=True):
-        # return False, np.random.rand(6), np.random.rand(65), np.random.rand(8)
+        #return False, np.random.rand(6), np.random.rand(65), np.random.rand(8)
 
         # re-init database if activated
         if self.reinit_interval > 0 and self.reinit_interval % RESTART_FREQUENCY == 0:
@@ -352,9 +352,12 @@ class DBEnv:
     def step(self, config):
 
         knobs = config.get_dictionary().copy()
-        for k in knobs.keys():
-            if self.knobs_detail[k]['type'] == 'integer' and self.knobs_detail[k]['max'] > sys.maxsize:
-                knobs[k] = knobs[k] * 1000
+        for k in self.knobs_detail.keys():
+            if k in knobs.keys():
+                if self.knobs_detail[k]['type'] == 'integer' and self.knobs_detail[k]['max'] > sys.maxsize:
+                    knobs[k] = knobs[k] * 1000
+            else:
+                knobs[k] = self.knobs_detail[k]['default']
 
         try:
             timeout, metrics, internal_metrics, resource = self.step_GP(knobs, collect_resource=True)

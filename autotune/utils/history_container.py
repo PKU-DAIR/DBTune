@@ -48,6 +48,32 @@ def detect_valid_history_file(dir):
     return valid_files
 
 
+def load_history_from_filelist(task_id, fileL, config_space):
+
+    data_mutipleL = list()
+    for fn in fileL:
+        try:
+            with open(fn) as fp:
+                all_data = json.load(fp)
+        except Exception as e:
+            print('Encountered exception %s while reading runhistory from %s. '
+                  'Not adding any runs!', e, fn, )
+            return
+
+        info = all_data["info"]
+        data = all_data["data"]
+        data_mutipleL = data_mutipleL + data
+
+
+    file_out = 'history_{}.json'.format(task_id)
+    with open(file_out, "w") as fp:
+        json.dump({"info": info, "data": data_mutipleL}, fp, indent=2)
+
+    history_container = HistoryContainer(task_id, config_space=config_space)
+    history_container.load_history_from_json(file_out)
+
+    return history_container
+
 
 
 

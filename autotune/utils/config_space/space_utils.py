@@ -234,3 +234,13 @@ def estimate_size(space, configfile):
         for i in range(1, len(sizes)):
             size = size * sizes[i]
         return size
+
+def get_space_feature(configspace):
+    integer, cateratory = 0, 0
+    for i, config in enumerate(configspace.get_hyperparameters()):
+        if isinstance(config, CategoricalHyperparameter):
+            cateratory += 1
+        else:
+            integer += 1
+
+    return  [cateratory + integer, integer/(integer+cateratory), cateratory/(integer+cateratory)]

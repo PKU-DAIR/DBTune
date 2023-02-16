@@ -180,7 +180,8 @@ class KnobSelector(ABC):
 
         for i in range(num_hps):
             if logging:
-                self.logger.info("Top{}: {}, its feature importance is {:.4%}".format(i + 1, a[i][0], a[i][1]))
+                if a[i][1] > 0.01:
+                    self.logger.info("Top{}: {}, its feature importance is {:.4%}".format(i + 1, a[i][0], a[i][1]))
             knob = a[i][0]
             cs_new.add_hyperparameter(hps[knob])
 

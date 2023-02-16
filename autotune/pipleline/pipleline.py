@@ -8,7 +8,9 @@ import time
 import traceback
 import math
 import random
+import pandas as pd
 from typing import List
+import xgboost as xgb
 from collections import OrderedDict, defaultdict
 from tqdm import tqdm
 from autotune.utils.util_funcs import check_random_state
@@ -24,7 +26,7 @@ from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
 from autotune.utils.limit import time_limit, TimeoutException, no_time_limit_func
 from autotune.utils.util_funcs import get_result
 from autotune.utils.config_space import ConfigurationSpace
-from autotune.utils.config_space.space_utils import estimate_size
+from autotune.utils.config_space.space_utils import estimate_size, get_space_feature
 from autotune.selector.selector import KnobSelector
 from autotune.optimizer.surrogate.core import build_surrogate, surrogate_switch
 from autotune.optimizer.core import build_acq_func, build_optimizer
@@ -71,6 +73,8 @@ class PipleLine(BOBase):
                  space_transfer=False,
                  knob_config_file=None,
                  auto_optimizer=False,
+                 hold_out_workload=None,
+                 history_workload_data=None,
                  advisor_kwargs: dict = None,
                  **kwargs
                  ):
@@ -91,8 +95,8 @@ class PipleLine(BOBase):
         self.incremental = incremental  # none, increase, decrease
         self.incremental_every = incremental_every  # how often increment the number of knobs
         self.incremental_num = incremental_num  # how many knobs to increment each time
-        self.num_hps_init = num_hps_init
         self.num_hps_max = len(self.config_space_all.get_hyperparameters())
+        self.num_hps_init = num_hps_init if not num_hps_init == -1 else self.num_hps_max
         self.num_metrics = num_metrics
         self.selector = KnobSelector(self.selector_type)
         self.current_context = None
@@ -102,6 +106,24 @@ class PipleLine(BOBase):
         if space_transfer:
             self.space_step_limit = 3
             self.space_step = 0
+
+        if auto_optimizer:
+            self.source_workloadL = ['sysbench', 'twitter', 'job', 'tpch']
+            self.source_workloadL.remove(hold_out_workload)
+            self.ranker = xgb.XGBRanker(
+                # tree_method='gpu_hist',
+                booster='gbtree',
+                objective='rank:pairwise',
+                random_state=42,
+                learning_rate=0.1,
+                colsample_bytree=0.9,
+                eta=0.05,
+                max_depth=6,
+                n_estimators=110,
+                subsample=0.75
+            )
+            self.ranker.load_model("tools/xgboost_test_{}.json".format(hold_out_workload))
+            self.history_workload_data =  history_workload_data
 
         self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/data2/ruike/DBTune/scripts/experiment/gen_knobs/mysql_all_197_32G.json')))
         advisor_kwargs = advisor_kwargs or {}
@@ -287,51 +309,73 @@ class PipleLine(BOBase):
                 self.config_space = new_config_space
 
         else:
-            # rank all knobs after init
-            if self.iteration_id == self.init_num:
-                _, self.knob_rank = self.selector.knob_selection(
-                    self.config_space_all, self.history_container, self.num_hps_max)
-
             incremental_step = int((self.iteration_id - self.init_num)/self.incremental_every)
             if self.incremental == 'increase':
                 num_hps = self.num_hps_init + incremental_step * self.incremental_every
                 num_hps = min(num_hps, self.num_hps_max)
+                self.logger.info("['increase'] tune {} knobs".format(num_hps))
+                if not num_hps  == len(self.config_space.get_hyperparameter_names()):
+                    _, self.knob_rank = self.selector.knob_selection(self.config_space_all, self.history_container, self.num_hps_max)
+                    new_config_space = ConfigurationSpace()
+                    for knob in self.knob_rank[:num_hps]:
+                        new_config_space.add_hyperparameter(self.config_space_all.get_hyperparameter(knob) )
 
-                new_config_space = ConfigurationSpace()
-                for knob in self.knob_rank[:num_hps]:
-                    new_config_space.add_hyperparameter(self.config_space_all.get_hyperparameter(knob) )
-
-                if not self.config_space == new_config_space:
                     logger.info("new configuration space: {}".format(new_config_space))
                     self.history_container.alter_configuration_space(new_config_space)
                     self.config_space = new_config_space
 
             elif self.incremental == 'decrease':
-                num_hps = self.num_hps_init * 0.6#- incremental_step * self.incremental_every
-                num_hps = max(num_hps, 1)
+                num_hps = int(self.num_hps_init * (0.6 **  incremental_step)) #- incremental_step * self.incremental_every
+                num_hps = max(num_hps, 5)
+                self.logger.info("['decrease'] tune {} knobs".format(num_hps))
+                if not num_hps == len(self.config_space.get_hyperparameter_names()):
+                    _, self.knob_rank = self.selector.knob_selection(self.config_space_all, self.history_container, self.num_hps_max)
+                    new_config_space = ConfigurationSpace()
+                    for knob in self.knob_rank[:num_hps]:
+                        new_config_space.add_hyperparameter(self.config_space_all.get_hyperparameter(knob))
 
-                new_config_space = ConfigurationSpace()
-                for knob in self.knob_rank[:num_hps]:
-                    new_config_space.add_hyperparameter(self.config_space_all.get_hyperparameter(knob))
+                    # # fix the knobs that no more to tune
+                    # inc_config = self.history_container.incumbents[0][0]
+                    # self.objective_function(inc_config)
 
-                # fix the knobs that no more to tune
-                inc_config = self.history_container.incumbents[0][0]
-                self.objective_function(inc_config)
-
-                if not self.config_space == new_config_space:
                     logger.info("new configuration space: {}".format(new_config_space))
                     self.history_container.alter_configuration_space(new_config_space)
                     self.config_space = new_config_space
 
-    def select_optimizer(self):
-        idx = random.choices([i for i in range(len(self.optimizer_list))])[0]
-        self.logger.info("select {}".format(self.optimizer_list[idx]))
-        return self.optimizer_list[idx]
+    def select_optimizer(self, space, type='random'):
+        if type == 'random':
+            idx = random.choices([i for i in range(len(self.optimizer_list))])[0]
+            self.logger.info("select {}".format(self.optimizer_list[idx]))
+            return self.optimizer_list[idx]
+
+        if self.iteration_id < self.init_num:
+            self.logger.info("select {}".format(self.optimizer_list[-1]))
+            return self.optimizer_list[-1]
+        
+        # feature needed: smac, mbo, ddpg, ga, sysbench, twitter, tpch, target, knob_num, integer, enum, iteration
+        if not hasattr(self, 'rgpe_op'):
+            rng = check_random_state(100)
+            seed = rng.randint(MAXINT)
+            self.rgpe_op = RGPE(self.config_space, self.history_workload_data, seed, num_src_hpo_trial=-1, only_source=False)
+
+        feature_name = [ 'smac', 'mbo', 'ddpg', 'ga'] + self.source_workloadL + ['target', 'knob_num', 'integer', 'enum', 'iteration']
+        df = pd.DataFrame(columns=feature_name)
+
+        rank_loss_list = self.rgpe_op.get_ranking_loss(self.history_container)
+        config_feature = get_space_feature(space)
+        for i in range(4):
+            temp = [0] * 4
+            temp[i] = 1
+            df.loc[len(df)] = temp + rank_loss_list + config_feature + [self.iteration_id]
+
+        pdb.set_trace()
+        self.ranker.predict(df)
+
 
     def iterate(self, compact_space=None):
         self.knob_selection()
         if self.auto_optimizer:
-            self.optimizer = self.select_optimizer()
+            self.optimizer = self.select_optimizer(type='learned', space=self.config_space if compact_space is None else compact_space)
         # get configuration suggestion
         config = self.optimizer.get_suggestion(history_container=self.history_container, compact_space=compact_space)
         _, trial_state, constraints, objs = self.evaluate(config)
@@ -439,13 +483,16 @@ class PipleLine(BOBase):
             del (weight[candidate_list.index(item)])
             candidate_list.remove(item)
 
+        if not len(surrogate_list) - 1 in sample_list:
+            sample_list.append(len(surrogate_list) - 1)
+
         # obtain the pruned space for the sampled tasks
         important_dict = defaultdict(int)
         pruned_space_list = list()
         quantile_min = 1 / 1e9
         quantile_max = 1 - 1 / 1e9
         for j in range(len(surrogate_list)):
-            if not j in sample_list and not j == len(surrogate_list) - 1:
+            if not j in sample_list:
                 continue
             quantile = quantile_max - (1 - 2 * max(similarity_list[j] - 0.5, 0)) * (quantile_max - quantile_min)
             ys_source = - surrogate_list[j].get_transformed_perfs()

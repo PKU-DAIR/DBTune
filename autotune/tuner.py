@@ -1,11 +1,12 @@
 import os
 import sys
+from collections import  defaultdict
 from autotune.utils.config_space import ConfigurationSpace, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
 from autotune.workload_map import WorkloadMapping
 from autotune.pipleline.pipleline import PipleLine
 from .knobs import ts, logger, initialize_knobs
 from .utils.parser import  get_hist_json
-from autotune.utils.history_container import HistoryContainer
+from autotune.utils.history_container import HistoryContainer, load_history_from_filelist
 import pdb
 
 class DBTuner:
@@ -13,13 +14,16 @@ class DBTuner:
         self.env = env
         self.create_output_folders()
         self.args_tune = args_tune
+        self.args_db = args_db
         self.method = args_tune['optimize_method']
         self.y_variable = env.y_variable
         self.transfer_framework = args_tune['transfer_framework']
         self.hc_path = self.args_tune['data_repo']
         self.space_transfer = eval(self.args_tune['space_transfer'])
+        self.auto_optimizer = eval(self.args_tune['auto_optimizer'])
 
-        self.hcL = []
+        self.hcL = list()
+        self.history_workload_data = list()
         self.model_params_path = ''
         self.surrogate_type = None
         self.objs = eval(args_tune['performance_metric'])
@@ -28,8 +32,7 @@ class DBTuner:
         else:
             self.constraints = eval(args_tune['constraints'])
 
-        self.knob_config_file = args_db['knob_config_file']
-        self.config_space = self.setup_configuration_space(self.knob_config_file, int(args_db['knob_num']))
+        self.config_space = self.setup_configuration_space(args_db['knob_config_file'], int(args_db['knob_num']))
         self.setup_transfer()
 
 
@@ -64,7 +67,7 @@ class DBTuner:
 
     def load_history(self):
         files = os.listdir(self.hc_path)
-        config_space = self.setup_configuration_space(self.knob_config_file, -1)
+        config_space = self.setup_configuration_space(self.args_db['knob_config_file'], -1)
         for f in files:
             try:
                 task_id = f.split('.')[0]
@@ -112,9 +115,34 @@ class DBTuner:
         else:
             raise ValueError('Invalid string %s for transfer framework!' % self.transfer_framework)
 
-        if self.space_transfer and len(self.hcL)==0:
+        if len(self.hcL)==0 and self.space_transfer:
             self.load_history()
 
+        if self.auto_optimizer:
+            self.history_workload_data = self.load_workload_data()
+
+    def load_workload_data(self):
+        file_dict = defaultdict(list)
+        history_workload_data = list()
+        workloadL= [ 'sysbench', 'twitter', 'job', 'tpch']
+        workloadL.remove(self.args_db['workload'])
+        files = os.listdir(self.hc_path)
+        config_space = self.setup_configuration_space(self.args_db['knob_config_file'], -1)
+        for f in files:
+                task_id = f.split('.')[0]
+                for workload in workloadL:
+                    if workload in task_id:
+                        break
+                if not workload in task_id:
+                    continue
+                fn = os.path.join(self.hc_path, f)
+                file_dict[workload].append(fn)
+
+        for workload in file_dict.keys():
+            history_container = load_history_from_filelist(workload, file_dict[workload], config_space)
+            history_workload_data.append(history_container)
+
+        return history_workload_data
 
     def tune(self):
         bo = PipleLine(self.env.step,
@@ -141,8 +169,10 @@ class DBTuner:
                        batch_size=int(self.args_tune['batch_size']),
                        params=self.model_params_path,
                        space_transfer=self.space_transfer,
-                       knob_config_file=self.knob_config_file,
-                       auto_optimizer=eval(self.args_tune['auto_optimizer']))
+                       knob_config_file=self.args_db['knob_config_file'],
+                       auto_optimizer=self.auto_optimizer,
+                       hold_out_workload=self.args_db['workload'],
+                       history_workload_data=self.history_workload_data)
         history = bo.run()
         if history.num_objs == 1:
             import matplotlib.pyplot as plt
