@@ -393,10 +393,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
             # optimize acquisition function
             if not compact_space is None:
                 self.optimizer.set_compact_space(compact_space)
-            challengers = self.optimizer.maximize(runhistory=history_container,
-                                                  num_points=5000)
-            if not compact_space is None:
-                challengers.challengers = impute_incumb_values(challengers.challengers, history_container.get_incumbents()[0][0])
+            challengers = self.optimizer.maximize(runhistory=history_container, num_points=5000)
             if return_list:
                 # Caution: return_list doesn't contain random configs sampled according to rand_prob
                 return challengers.challengers

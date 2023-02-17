@@ -61,8 +61,8 @@ class DBTuner:
 
             knobs_list.append(knob)
 
-
         config_space.add_hyperparameters(knobs_list)
+
         return config_space
 
     def load_history(self):

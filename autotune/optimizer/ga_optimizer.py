@@ -8,7 +8,7 @@ from autotune.utils.history_container import HistoryContainer
 from autotune.utils.constants import MAXINT, SUCCESS
 from autotune.utils.config_space import get_one_exchange_neighbourhood
 from autotune.utils.history_container import Observation
-
+from autotune.utils.config_space.util import configs2space
 
 class GA_Optimizer(object, metaclass=abc.ABCMeta):
 
@@ -56,7 +56,7 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
         self.initialize(history_container)
 
     def initialize(self, history_container: HistoryContainer):
-        all_configs = history_container.get_all_configs()
+        all_configs = configs2space(history_container.get_all_configs(), self.config_space)
         all_perfs = history_container.get_all_perfs()
         self.all_configs = set(all_configs)
 

@@ -19,7 +19,7 @@ from autotune.utils.history_container import HistoryContainer, MOHistoryContaine
 from autotune.utils.constants import MAXINT, SUCCESS
 from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
 from autotune.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
-from autotune.utils.config_space.util import convert_configurations_to_array
+from autotune.utils.config_space.util import convert_configurations_to_array, impute_incumb_values
 from autotune.utils.history_container import Observation
 from autotune.pipleline.base import BOBase
 from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
@@ -99,6 +99,7 @@ class PipleLine(BOBase):
         self.num_hps_init = num_hps_init if not num_hps_init == -1 else self.num_hps_max
         self.num_metrics = num_metrics
         self.selector = KnobSelector(self.selector_type)
+        self.random_state = random_state
         self.current_context = None
         self.space_transfer = space_transfer
         self.knob_config_file = knob_config_file
@@ -141,7 +142,7 @@ class PipleLine(BOBase):
         # load history container if exists
         self.load_history()
         if not self.auto_optimizer:
-            if optimizer_type in ('MBO', 'SMAC', 'auto') or self.method_selection:
+            if optimizer_type in ('MBO', 'SMAC', 'auto'):
                 self.optimizer = BO_Optimizer(config_space,
                                               self.history_container,
                                               num_objs=self.num_objs,
@@ -170,7 +171,6 @@ class PipleLine(BOBase):
                                               self.history_container,
                                               num_objs=self.num_objs,
                                               num_constraints=num_constraints,
-                                              optimization_strategy=sample_strategy,
                                               output_dir=logging_dir,
                                               random_state=random_state,
                                               **advisor_kwargs)
@@ -188,7 +188,6 @@ class PipleLine(BOBase):
                 assert self.incremental == 'none'
                 self.optimizer = DDPG_Optimizer(config_space,
                                                 self.history_container,
-                                                knobs_num=self.num_hps_init if not self.num_hps_init == -1 else len(self.config_space.get_hyperparameter_names()),
                                                 metrics_num=num_metrics,
                                                 task_id=task_id,
                                                 params=kwargs['params'],
@@ -231,13 +230,11 @@ class PipleLine(BOBase):
                               self.history_container,
                               num_objs=self.num_objs,
                               num_constraints=num_constraints,
-                              optimization_strategy=sample_strategy,
                               output_dir=logging_dir,
                               random_state=random_state,
                               **advisor_kwargs)
             DDPG = DDPG_Optimizer(config_space,
                                   self.history_container,
-                                  knobs_num=self.num_hps_init if not self.num_hps_init == -1 else len(self.config_space.get_hyperparameter_names()),
                                   metrics_num=num_metrics,
                                   task_id=task_id,
                                   params=kwargs['params'],
@@ -379,7 +376,35 @@ class PipleLine(BOBase):
         if self.auto_optimizer:
             self.optimizer = self.select_optimizer(type='learned', space=self.config_space if compact_space is None else compact_space)
         # get configuration suggestion
+        if  not compact_space is None and not compact_space == self.optimizer.config_space:
+            if isinstance(self.optimizer, GA_Optimizer):
+                self.optimizer = GA_Optimizer(compact_space,
+                                  self.history_container,
+                                  num_objs=self.num_objs,
+                                  num_constraints=self.num_constraints,
+                                  output_dir=self.optimizer.output_dir,
+                                  random_state=self.random_state)
+                if self.auto_optimizer:
+                    self.optimizer_list[-1] = self.optimizer
+
+            if isinstance(self.optimizer, DDPG_Optimizer):
+                self.optimizer = DDPG_Optimizer(compact_space,
+                               self.history_container,
+                               metrics_num=self.num_metrics,
+                               task_id=self.history_container.task_id,
+                               params=self.optimizer.params,
+                               batch_size=self.optimizer.batch_size,
+                               mean_var_file=self.optimizer.mean_var_file)
+                if self.auto_optimizer:
+                    self.optimizer_list[-2] = self.optimizer
+
         config = self.optimizer.get_suggestion(history_container=self.history_container, compact_space=compact_space)
+        if self.space_transfer:
+            if len(self.history_container.get_incumbents()):
+                config = impute_incumb_values(config, self.history_container.get_incumbents()[0][0])
+            else:
+                config = impute_incumb_values(config, self.config_space.get_default_configuration())
+
         _, trial_state, constraints, objs = self.evaluate(config)
         return config, trial_state, constraints, objs
 
@@ -429,7 +454,7 @@ class PipleLine(BOBase):
         )
         self.history_container.update_observation(observation)
 
-        if self.optimizer_type in ['GA', 'TurBO', 'DDPG']:
+        if self.optimizer_type in ['GA', 'TurBO', 'DDPG'] and not self.auto_optimizer:
             self.optimizer.update(observation)
 
         if self.auto_optimizer:
@@ -583,8 +608,11 @@ class PipleLine(BOBase):
             if default > max_index:
                 default = max_index
             transform = self.config_space.get_hyperparameters_dict()[knob]._transform
-            knob_add = UniformIntegerHyperparameter(knob, transform(min_index), transform(max_index),
+            try:
+                knob_add = UniformIntegerHyperparameter(knob, transform(min_index), transform(max_index),
                                                     transform(default))
+            except:
+                pdb.set_trace()
             target_space.add_hyperparameter(knob_add)
 
         print(target_space)

@@ -17,6 +17,7 @@ import numpy as np
 from autotune.optimizer.acquisition_function.acquisition import AbstractAcquisitionFunction
 from autotune.utils.config_space import get_one_exchange_neighbourhood, \
     Configuration, ConfigurationSpace
+from autotune.utils.config_space.util import configs2space
 from autotune.optimizer.acq_maximizer.random_configuration_chooser import ChooserNoCoolDown, ChooserProb
 from autotune.utils.history_container import HistoryContainer, MultiStartHistoryContainer
 from autotune.utils.util_funcs import get_types
@@ -306,6 +307,8 @@ class LocalSearch(AcquisitionFunctionMaximizer):
         else:
             # initiate local search with best configurations from previous runs
             configs_previous_runs = runhistory.get_all_configs()
+            configs_previous_runs = configs2space(configs_previous_runs, self.config_space)
+
             configs_previous_runs_sorted = self._sort_configs_by_acq_value(
                 configs_previous_runs)
             num_configs_local_search = int(min(

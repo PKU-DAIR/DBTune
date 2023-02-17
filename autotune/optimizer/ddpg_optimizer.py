@@ -8,6 +8,7 @@ import copy
 from autotune.optimizer.surrogate.ddpg.ddpg import DDPG
 from autotune.utils.history_container import Observation, HistoryContainer
 from autotune.utils.config_space import Configuration, CategoricalHyperparameter
+from autotune.utils.config_space.util import configs2space
 from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
 
 
@@ -42,7 +43,6 @@ def action2config(action, config_space):
 class DDPG_Optimizer:
     def __init__(self, config_space,
                  history_container: HistoryContainer,
-                 knobs_num,
                  metrics_num,
                  task_id,
                  initial_trials=5,
@@ -54,7 +54,6 @@ class DDPG_Optimizer:
         self.task_id = task_id
         self.config_space = config_space
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.knobs_num = knobs_num
         self.metrics_num = metrics_num
         self.batch_size = batch_size
         self.params = params
@@ -87,11 +86,13 @@ class DDPG_Optimizer:
             if len(self.internal_metrics) >= self.init_num:
                 self.gen_mean_var()
 
+        self.init_num = len(history_container.configurations)
         if self.create_model():
-            for i in range(len(history_container.configurations)):
+            configurations = configs2space(history_container.configurations, self.config_space)
+            for i in range(len(configurations)):
                 objs = [history_container.perfs[i]]
 
-                observation = Observation(config=history_container.configurations[i],
+                observation = Observation(config=configurations[i],
                                       objs=objs,
                                       constraints=history_container.constraint_perfs,
                                       trial_state=history_container.trial_states[i],
@@ -105,7 +106,7 @@ class DDPG_Optimizer:
 
 
     def create_model(self):
-        if (self.state_mean is None) or (self.state_var is None):
+        if (self.state_mean is None) or (self.state_var is None) :
             return False
 
         ddpg_opt = {
@@ -119,7 +120,7 @@ class DDPG_Optimizer:
         }
 
         self.model = DDPG(n_states=self.metrics_num,
-                          n_actions=self.knobs_num,
+                          n_actions=len(self.config_space.get_hyperparameter_names()),
                           opt=ddpg_opt,
                           ouprocess=True,
                           mean=self.state_mean,
@@ -292,3 +293,4 @@ class DDPG_Optimizer:
                 min_dis[j] = min(updated_dis, min_dis[j])
 
         return initial_configs
+
