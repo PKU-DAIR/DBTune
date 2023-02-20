@@ -611,8 +611,8 @@ class HistoryContainer(object):
             X_selected = X[Y >= np.quantile(Y, 0.9)]
 
         shap_values = explainer.shap_values(X)
-        shap_value_default = explainer.shap_values(X_bench)[-1]
-        delta = shap_values - shap_value_default
+        #shap_value_default = explainer.shap_values(X_bench)[-1]
+        delta = shap_values #- shap_value_default
         delta = np.where(delta > 0, delta, 0)
         feature_importance = np.average(delta, axis=0)
 

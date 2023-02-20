@@ -104,12 +104,12 @@ class PipleLine(BOBase):
         self.space_transfer = space_transfer
         self.knob_config_file = knob_config_file
         self.auto_optimizer = auto_optimizer
-        if space_transfer:
+        if space_transfer or auto_optimizer:
             self.space_step_limit = 3
             self.space_step = 0
 
         if auto_optimizer:
-            self.source_workloadL = ['sysbench', 'twitter', 'job', 'tpch']
+            self.source_workloadL = ['sysbench', 'oltpbench_twitter', 'job', 'tpch']
             self.source_workloadL.remove(hold_out_workload)
             self.ranker = xgb.XGBRanker(
                 # tree_method='gpu_hist',
@@ -242,6 +242,7 @@ class PipleLine(BOBase):
                                   mean_var_file=kwargs['mean_var_file']
                                   )
             self.optimizer_list = [SMAC, MBO, DDPG, GA]
+            self.optimizer = SMAC
 
 
     def get_history(self):
@@ -260,29 +261,54 @@ class PipleLine(BOBase):
 
             start_time = time.time()
             self.iter_begin_time = start_time
-            # get another compace space
-            if self.space_transfer:
-                self.logger.info((self.space_step , self.space_step_limit))
-            if self.space_transfer and (self.space_step >= self.space_step_limit):
+            # get another compact space
+            if (self.space_transfer or self.auto_optimizer) and (self.space_step >= self.space_step_limit):
                 self.space_step_limit = 3
                 self.space_step = 0
-                compact_space = self.get_compact_space()
+                if self.space_transfer:
+                    compact_space = self.get_compact_space()
+
+                if self.auto_optimizer:
+                    self.optimizer = self.select_optimizer(type='learned', space=self.config_space if compact_space is None else compact_space)
+
+                if self.space_transfer and not compact_space == self.optimizer.config_space:
+                    if isinstance(self.optimizer, GA_Optimizer):
+                        self.optimizer = GA_Optimizer(compact_space,
+                                                      self.history_container,
+                                                      num_objs=self.num_objs,
+                                                      num_constraints=self.num_constraints,
+                                                      output_dir=self.optimizer.output_dir,
+                                                      random_state=self.random_state)
+                        if self.auto_optimizer:
+                            self.optimizer_list[-1] = self.optimizer
+
+                    if isinstance(self.optimizer, DDPG_Optimizer):
+                        self.optimizer = DDPG_Optimizer(compact_space,
+                                                        self.history_container,
+                                                        metrics_num=self.num_metrics,
+                                                        task_id=self.history_container.task_id,
+                                                        params=self.optimizer.params,
+                                                        batch_size=self.optimizer.batch_size,
+                                                        mean_var_file=self.optimizer.mean_var_file)
+                        if self.auto_optimizer:
+                            self.optimizer_list[-2] = self.optimizer
+
 
             if self.space_transfer:
                 space = compact_space if not compact_space is None else self.config_space
-                self.logger.info("[Iteration {}] Total space size:{}".format(self.iteration_id, estimate_size(space, self.knob_config_file)))
+                self.logger.info("[Iteration {}] [{},{}] Total space size:{}".format(self.iteration_id,self.space_step , self.space_step_limit, estimate_size(space, self.knob_config_file)))
 
             _ , _, _, objs = self.iterate(compact_space)
 
             # determine whether explore one more step in the space
-            if self.space_transfer and  len(self.history_container.get_incumbents()) > 0 and objs[0] < self.history_container.get_incumbents()[0][1]:
+            if (self.space_transfer or self.auto_optimizer) and  len(self.history_container.get_incumbents()) > 0 and objs[0] < self.history_container.get_incumbents()[0][1]:
                 self.space_step_limit += 1
 
             self.save_history()
             runtime = time.time() - start_time
             self.budget_left -= runtime
             # recode the step in the space
-            if self.space_transfer:
+            if self.space_transfer or self.auto_optimizer:
                 self.space_step += 1
 
         return self.get_history()
@@ -339,15 +365,16 @@ class PipleLine(BOBase):
                     self.history_container.alter_configuration_space(new_config_space)
                     self.config_space = new_config_space
 
-    def select_optimizer(self, space, type='random'):
+    def select_optimizer(self, space, type='learned'):
+        optimizer_name = [ 'smac', 'mbo', 'ddpg', 'ga']
         if type == 'random':
             idx = random.choices([i for i in range(len(self.optimizer_list))])[0]
-            self.logger.info("select {}".format(self.optimizer_list[idx]))
+            self.logger.info("select {}".format(optimizer_name[idx]))
             return self.optimizer_list[idx]
 
         if self.iteration_id < self.init_num:
-            self.logger.info("[random] select {}".format(self.optimizer_list[-1]))
-            return self.optimizer_list[-1]
+            self.logger.info("select {}".format(optimizer_name[0]))
+            return self.optimizer_list[0]
         
         # feature needed: smac, mbo, ddpg, ga, sysbench, twitter, tpch, target, knob_num, integer, enum, iteration
         if not hasattr(self, 'rgpe_op'):
@@ -355,7 +382,7 @@ class PipleLine(BOBase):
             seed = rng.randint(MAXINT)
             self.rgpe_op = RGPE(self.config_space, self.history_workload_data, seed, num_src_hpo_trial=-1, only_source=False)
 
-        feature_name = [ 'smac', 'mbo', 'ddpg', 'ga'] + self.source_workloadL + ['target', 'knob_num', 'integer', 'enum', 'iteration']
+        feature_name = optimizer_name + self.source_workloadL + ['target', 'knob_num', 'integer', 'enum', 'iteration']
         df = pd.DataFrame(columns=feature_name)
 
         rank_loss_list = self.rgpe_op.get_ranking_loss(self.history_container)
@@ -367,37 +394,13 @@ class PipleLine(BOBase):
 
         rank = self.ranker.predict(df)
         idx = np.argmin(rank)
-        self.logger.info("[learned] select {}".format(self.optimizer_list[idx]))
+        self.logger.info("[learned] select {}".format(optimizer_name[idx]))
         return self.optimizer_list[idx]
 
 
     def iterate(self, compact_space=None):
         self.knob_selection()
-        if self.auto_optimizer:
-            self.optimizer = self.select_optimizer(type='learned', space=self.config_space if compact_space is None else compact_space)
         # get configuration suggestion
-        if  not compact_space is None and not compact_space == self.optimizer.config_space:
-            if isinstance(self.optimizer, GA_Optimizer):
-                self.optimizer = GA_Optimizer(compact_space,
-                                  self.history_container,
-                                  num_objs=self.num_objs,
-                                  num_constraints=self.num_constraints,
-                                  output_dir=self.optimizer.output_dir,
-                                  random_state=self.random_state)
-                if self.auto_optimizer:
-                    self.optimizer_list[-1] = self.optimizer
-
-            if isinstance(self.optimizer, DDPG_Optimizer):
-                self.optimizer = DDPG_Optimizer(compact_space,
-                               self.history_container,
-                               metrics_num=self.num_metrics,
-                               task_id=self.history_container.task_id,
-                               params=self.optimizer.params,
-                               batch_size=self.optimizer.batch_size,
-                               mean_var_file=self.optimizer.mean_var_file)
-                if self.auto_optimizer:
-                    self.optimizer_list[-2] = self.optimizer
-
         config = self.optimizer.get_suggestion(history_container=self.history_container, compact_space=compact_space)
         if self.space_transfer:
             if len(self.history_container.get_incumbents()):
@@ -457,7 +460,7 @@ class PipleLine(BOBase):
         if self.optimizer_type in ['GA', 'TurBO', 'DDPG'] and not self.auto_optimizer:
             self.optimizer.update(observation)
 
-        if self.auto_optimizer:
+        if self.auto_optimizer and not self.space_transfer:
             self.optimizer_list[2].update(observation)
             self.optimizer_list[3].update(observation)
 
@@ -613,6 +616,8 @@ class PipleLine(BOBase):
                                                     transform(default))
             except:
                 pdb.set_trace()
+                knob_add = UniformIntegerHyperparameter(knob, transform(min_index), transform(max_index),
+                                                        transform(default))
             target_space.add_hyperparameter(knob_add)
 
         print(target_space)

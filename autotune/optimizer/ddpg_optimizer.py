@@ -102,7 +102,10 @@ class DDPG_Optimizer:
                                       resource=history_container.resource[i],
                                       IM=history_container.internal_metrics[i],
                                       info=history_container.info, context=history_container.contexts[i])
-                self.update(observation)
+                try:
+                    self.update(observation)
+                except:
+                    pass
 
 
     def create_model(self):
@@ -129,7 +132,11 @@ class DDPG_Optimizer:
         return True
 
     def gen_mean_var(self):
-        r = np.array(self.internal_metrics)
+        r = list()
+        for im in self.internal_metrics:
+            if len(im) == 65:
+                r.append(im)
+        r = np.array(r)
         self.state_mean = r.mean(axis=0)
         self.state_var = r.var(axis=0)
 

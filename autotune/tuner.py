@@ -124,7 +124,7 @@ class DBTuner:
     def load_workload_data(self):
         file_dict = defaultdict(list)
         history_workload_data = list()
-        workloadL= [ 'sysbench', 'twitter', 'job', 'tpch']
+        workloadL= [ 'sysbench', 'oltpbench_twitter', 'job', 'tpch']
         workloadL.remove(self.args_db['workload'])
         files = os.listdir(self.hc_path)
         config_space = self.setup_configuration_space(self.args_db['knob_config_file'], -1)
