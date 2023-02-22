@@ -31,7 +31,6 @@ class DBTuner:
             self.constraints = []
         else:
             self.constraints = eval(args_tune['constraints'])
-
         self.config_space = self.setup_configuration_space(args_db['knob_config_file'], int(args_db['knob_num']))
         self.setup_transfer()
 
@@ -65,9 +64,9 @@ class DBTuner:
 
         return config_space
 
-    def load_history(self):
+    def load_history(self, knob_num):
         files = os.listdir(self.hc_path)
-        config_space = self.setup_configuration_space(self.args_db['knob_config_file'], -1)
+        config_space = self.setup_configuration_space(self.args_db['knob_config_file'], int(self.args_db['knob_num']))
         for f in files:
             try:
                 task_id = f.split('.')[0]
@@ -88,7 +87,7 @@ class DBTuner:
                 self.surrogate_type = 'auto'
 
         elif self.transfer_framework in ['workload_map', 'rgpe']:
-            self.load_history()
+            self.load_history(int(self.args_db['knob_num']))
             if self.method == 'SMAC':
                 method = 'prf'
             elif self.method == 'MBO':
@@ -116,7 +115,7 @@ class DBTuner:
             raise ValueError('Invalid string %s for transfer framework!' % self.transfer_framework)
 
         if len(self.hcL)==0 and self.space_transfer:
-            self.load_history()
+            self.load_history(-1)
 
         if self.auto_optimizer:
             self.history_workload_data = self.load_workload_data()
@@ -124,10 +123,10 @@ class DBTuner:
     def load_workload_data(self):
         file_dict = defaultdict(list)
         history_workload_data = list()
-        workloadL= [ 'sysbench', 'oltpbench_twitter', 'job', 'tpch']
+        workloadL= [ 'sysbench', 'twitter', 'job', 'tpch']
         workloadL.remove(self.args_db['workload'])
         files = os.listdir(self.hc_path)
-        config_space = self.setup_configuration_space(self.args_db['knob_config_file'], -1)
+        config_space = self.setup_configuration_space(self.args_db['knob_config_file'], int(self.args_db['knob_num']))
         for f in files:
                 task_id = f.split('.')[0]
                 for workload in workloadL:

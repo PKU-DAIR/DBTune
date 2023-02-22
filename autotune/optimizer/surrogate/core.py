@@ -15,7 +15,7 @@ def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data
     if func_str == 'prf':
         try:
             from autotune.optimizer.surrogate.base.rf_with_instances import RandomForestWithInstances
-            return RandomForestWithInstances(types=types, bounds=bounds, seed=seed)
+            return RandomForestWithInstances(types=types, bounds=bounds, seed=seed, config_space=config_space)
         except ModuleNotFoundError:
             from autotune.optimizer.surrogate.base.rf_with_instances_sklearn import skRandomForestWithInstances
             print('[Build Surrogate] Use probabilistic random forest based on scikit-learn. For better performance, '

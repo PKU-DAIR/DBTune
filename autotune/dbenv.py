@@ -266,6 +266,34 @@ class DBEnv:
         return benchmark_timeout, external_metrics, internal_metrics, (
             cpu, avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory, dirty_pages, hit_ratio, page_data)
 
+
+    def apply_knobs(self, knobs):
+        for key in knobs.keys():
+            value = knobs[key]
+            if not key in self.knobs_detail.keys() or not self.knobs_detail[key]['type'] == 'integer':
+                continue
+            if value > self.knobs_detail[key]['max']:
+                knobs[key] = self.knobs_detail[key]['max']
+                logger.info("{} with value of is larger than max, adjusted".format(key))
+            elif value < self.knobs_detail[key]['min']:
+                knobs[key] = self.knobs_detail[key]['min']
+                logger.info("{} with value of is smaller than min, adjusted".format(key))
+
+        logger.info("[step {}] generate knobs: {}\n".format(self.step_count, knobs))
+        if self.online_mode:
+            flag = self.db.apply_knobs_online(knobs)
+        else:
+            flag = self.db.apply_knobs_offline(knobs)
+
+        if not flag:
+            if self.reinit:
+                logger.info('reinitializing db begin')
+                self.db.reinitdb_magic(self.remote_mode)
+                logger.info('db reinitialized')
+
+            raise Exception('Apply knobs failed!')
+
+
     def step_GP(self, knobs, collect_resource=True):
         #return False, np.random.rand(6), np.random.rand(65), np.random.rand(8)
         # re-init database if activated

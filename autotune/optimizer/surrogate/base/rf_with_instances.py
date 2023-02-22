@@ -45,6 +45,7 @@ class RandomForestWithInstances(AbstractModel):
                  eps_purity: float=1e-8,
                  max_num_nodes: int=2**20,
                  seed: int=42,
+                 config_space=None,
                  **kwargs):
         """
         Parameters
@@ -112,6 +113,7 @@ class RandomForestWithInstances(AbstractModel):
 
         self.logger = logging.getLogger(self.__module__ + "." +
                                         self.__class__.__name__)
+        self.config_space = config_space
 
     def _train(self, X: np.ndarray, y: np.ndarray):
         """Trains the random forest on X and y.

@@ -75,7 +75,9 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         self.optimizer = None
         self.auto_alter_model = False
         self.algo_auto_selection()
+        self.setup_bo_basics(self.config_space)
         self.check_setup()
+
 
     def algo_auto_selection(self):
         from ConfigSpace import UniformFloatHyperparameter, UniformIntegerHyperparameter, \
@@ -298,8 +300,8 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         return initial_configs
 
     def get_surrogate(self, history_container: HistoryContainer):
-
-        self.setup_bo_basics(history_container.config_space)
+        if not history_container.config_space == self.surrogate_model.config_space:
+            self.setup_bo_basics(history_container.config_space)
 
         X = convert_configurations_to_array(history_container.configurations)
         Y = history_container.get_transformed_perfs()

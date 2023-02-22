@@ -384,7 +384,6 @@ class PipleLine(BOBase):
 
         feature_name = optimizer_name + self.source_workloadL + ['target', 'knob_num', 'integer', 'enum', 'iteration']
         df = pd.DataFrame(columns=feature_name)
-
         rank_loss_list = self.rgpe_op.get_ranking_loss(self.history_container)
         config_feature = get_space_feature(space)
         for i in range(4):
