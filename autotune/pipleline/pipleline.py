@@ -11,6 +11,7 @@ import random
 import pandas as pd
 from typing import List
 import xgboost as xgb
+import json
 from collections import OrderedDict, defaultdict
 from tqdm import tqdm
 from autotune.utils.util_funcs import check_random_state
@@ -316,7 +317,7 @@ class PipleLine(BOBase):
     def knob_selection(self):
         assert self.num_objs == 1
 
-        if self.iteration_id < self.init_num:
+        if self.iteration_id < self.init_num and not self.incremental == 'increase':
             return
 
         if self.incremental == 'none':
@@ -332,13 +333,14 @@ class PipleLine(BOBase):
                 self.config_space = new_config_space
 
         else:
-            incremental_step = int((self.iteration_id - self.init_num)/self.incremental_every)
+            incremental_step = int( max(self.iteration_id - self.init_num, 0 )/self.incremental_every)
             if self.incremental == 'increase':
                 num_hps = self.num_hps_init + incremental_step * self.incremental_every
                 num_hps = min(num_hps, self.num_hps_max)
                 self.logger.info("['increase'] tune {} knobs".format(num_hps))
                 if not num_hps  == len(self.config_space.get_hyperparameter_names()):
-                    _, self.knob_rank = self.selector.knob_selection(self.config_space_all, self.history_container, self.num_hps_max)
+                    self.knob_rank = list(json.load(open(self.knob_config_file)).keys())
+                    #_, self.knob_rank = self.selector.knob_selection(self.config_space_all, self.history_container, self.num_hps_max)
                     new_config_space = ConfigurationSpace()
                     for knob in self.knob_rank[:num_hps]:
                         new_config_space.add_hyperparameter(self.config_space_all.get_hyperparameter(knob) )
