@@ -8,6 +8,7 @@ import time
 import traceback
 import math
 import random
+import pickle
 import pandas as pd
 from typing import List
 import xgboost as xgb
@@ -74,6 +75,7 @@ class PipleLine(BOBase):
                  space_transfer=False,
                  knob_config_file=None,
                  auto_optimizer=False,
+                 auto_optimizer_type='learned',
                  hold_out_workload=None,
                  history_workload_data=None,
                  advisor_kwargs: dict = None,
@@ -110,9 +112,11 @@ class PipleLine(BOBase):
             self.space_step = 0
 
         if auto_optimizer:
-            self.source_workloadL = ['sysbench', 'oltpbench_twitter', 'job', 'tpch']
-            self.source_workloadL.remove(hold_out_workload)
-            self.ranker = xgb.XGBRanker(
+            self.auto_optimizer_type = auto_optimizer_type
+            if auto_optimizer_type == 'learned':
+                self.source_workloadL = ['sysbench', 'oltpbench_twitter', 'job', 'tpch']
+                self.source_workloadL.remove(hold_out_workload)
+                self.ranker = xgb.XGBRanker(
                 # tree_method='gpu_hist',
                 booster='gbtree',
                 objective='rank:pairwise',
@@ -123,9 +127,12 @@ class PipleLine(BOBase):
                 max_depth=6,
                 n_estimators=110,
                 subsample=0.75
-            )
-            self.ranker.load_model("tools/xgboost_test_{}.json".format(hold_out_workload))
-            self.history_workload_data =  history_workload_data
+                )
+                self.ranker.load_model("tools/xgboost_test_{}.json".format(hold_out_workload))
+                self.history_workload_data =  history_workload_data
+            elif auto_optimizer_type == 'best':
+                with open("tools/{}_best_optimizer.pkl".format(hold_out_workload), 'rb') as f:
+                    self.best_method_id_list = pickle.load(f)
 
         self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/data2/ruike/DBTune/scripts/experiment/gen_knobs/mysql_all_197_32G.json')))
         advisor_kwargs = advisor_kwargs or {}
@@ -270,7 +277,7 @@ class PipleLine(BOBase):
                     compact_space = self.get_compact_space()
 
                 if self.auto_optimizer:
-                    self.optimizer = self.select_optimizer(type='learned', space=self.config_space if compact_space is None else compact_space)
+                    self.optimizer = self.select_optimizer(type=self.auto_optimizer_type, space=self.config_space if compact_space is None else compact_space)
 
                 if self.space_transfer and not compact_space == self.optimizer.config_space:
                     if isinstance(self.optimizer, GA_Optimizer):
@@ -370,6 +377,11 @@ class PipleLine(BOBase):
         optimizer_name = [ 'smac', 'mbo', 'ddpg', 'ga']
         if type == 'random':
             idx = random.choices([i for i in range(len(self.optimizer_list))])[0]
+            self.logger.info("select {}".format(optimizer_name[idx]))
+            return self.optimizer_list[idx]
+
+        if type == 'best':
+            idx = self.best_method_id_list[self.iteration_id]
             self.logger.info("select {}".format(optimizer_name[idx]))
             return self.optimizer_list[idx]
 

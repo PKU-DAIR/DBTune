@@ -117,7 +117,7 @@ class DBTuner:
         if len(self.hcL)==0 and self.space_transfer:
             self.load_history(-1)
 
-        if self.auto_optimizer:
+        if self.auto_optimizer and self.args_tune['auto_optimizer_type'] == 'learned':
             self.history_workload_data = self.load_workload_data()
 
     def load_workload_data(self):
@@ -170,6 +170,7 @@ class DBTuner:
                        space_transfer=self.space_transfer,
                        knob_config_file=self.args_db['knob_config_file'],
                        auto_optimizer=self.auto_optimizer,
+                       auto_optimizer_type= self.args_tune['auto_optimizer_type'],
                        hold_out_workload=self.args_db['workload'],
                        history_workload_data=self.history_workload_data)
         history = bo.run()
