@@ -21,7 +21,7 @@ from autotune.utils.history_container import HistoryContainer, MOHistoryContaine
 from autotune.utils.constants import MAXINT, SUCCESS
 from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
 from autotune.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
-from autotune.utils.config_space.util import convert_configurations_to_array, impute_incumb_values
+from autotune.utils.config_space.util import convert_configurations_to_array, impute_incumb_values, max_min_distance
 from autotune.utils.history_container import Observation
 from autotune.pipleline.base import BOBase
 from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
@@ -110,6 +110,9 @@ class PipleLine(BOBase):
         if space_transfer or auto_optimizer:
             self.space_step_limit = 3
             self.space_step = 0
+
+        if self.space_transfer:
+            self.initial_configurations = self.get_max_distence_best()
 
         if auto_optimizer:
             self.auto_optimizer_type = auto_optimizer_type
@@ -252,6 +255,11 @@ class PipleLine(BOBase):
             self.optimizer_list = [SMAC, MBO, DDPG, GA]
             self.optimizer = SMAC
 
+
+    def get_max_distence_best(self):
+        default_config = self.config_space.get_default_configuration()
+        candidate_configs = [history_container.incumbents[0][0] for history_container in self.history_bo_data]
+        return  max_min_distance(default_config=default_config, src_configs=candidate_configs, num=self.init_num)
 
     def get_history(self):
         return self.history_container
@@ -413,7 +421,11 @@ class PipleLine(BOBase):
     def iterate(self, compact_space=None):
         self.knob_selection()
         # get configuration suggestion
-        config = self.optimizer.get_suggestion(history_container=self.history_container, compact_space=compact_space)
+        if self.space_transfer and len(self.history_container.configurations) < self.init_num:
+            #space transfer: use best source config to init
+            config = self.initial_configurations[len(self.history_container.configurations)]
+        else:
+            config = self.optimizer.get_suggestion(history_container=self.history_container, compact_space=compact_space)
         if self.space_transfer:
             if len(self.history_container.get_incumbents()):
                 config = impute_incumb_values(config, self.history_container.get_incumbents()[0][0])

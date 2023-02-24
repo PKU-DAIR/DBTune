@@ -11,7 +11,7 @@ from autotune.utils.logging_utils import get_logger
 from autotune.utils.history_container import HistoryContainer
 from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
 from autotune.utils.multi_objective import get_chebyshev_scalarization, NondominatedPartitioning
-from autotune.utils.config_space.util import convert_configurations_to_array, impute_incumb_values
+from autotune.utils.config_space.util import convert_configurations_to_array, impute_incumb_values, max_min_distance
 from autotune.utils.constants import MAXINT
 from autotune.optimizer.surrogate.core import build_surrogate
 from autotune.optimizer.core import build_acq_func, build_optimizer
@@ -264,7 +264,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
             return initial_configs
         elif init_strategy == 'random_explore_first':
             candidate_configs = self.sample_random_configs(100, excluded_configs)
-            return self.max_min_distance(default_config, candidate_configs, num_random_config)
+            return max_min_distance(default_config, candidate_configs, num_random_config)
         elif init_strategy == 'sobol':
             sobol = SobolSampler(self.config_space, num_random_config, random_state=self.rng)
             initial_configs = [default_config] + sobol.generate(return_config=True)
@@ -276,28 +276,7 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
         else:
             raise ValueError('Unknown initial design strategy: %s.' % init_strategy)
 
-    def max_min_distance(self, default_config, src_configs, num):
-        min_dis = list()
-        initial_configs = list()
-        initial_configs.append(default_config)
 
-        for config in src_configs:
-            dis = np.linalg.norm(config.get_array() - default_config.get_array())
-            min_dis.append(dis)
-        min_dis = np.array(min_dis)
-
-        for i in range(num):
-            furthest_config = src_configs[np.argmax(min_dis)]
-            initial_configs.append(furthest_config)
-            min_dis[np.argmax(min_dis)] = -1
-
-            for j in range(len(src_configs)):
-                if src_configs[j] in initial_configs:
-                    continue
-                updated_dis = np.linalg.norm(src_configs[j].get_array() - furthest_config.get_array())
-                min_dis[j] = min(updated_dis, min_dis[j])
-
-        return initial_configs
 
     def get_surrogate(self, history_container: HistoryContainer):
         if not history_container.config_space == self.surrogate_model.config_space:

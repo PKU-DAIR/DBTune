@@ -16,7 +16,7 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
                  history_container: HistoryContainer,
                  num_objs=1,
                  num_constraints=0,
-                 population_size=30,
+                 population_size=10,
                  subset_size=20,
                  epsilon=0.2,
                  strategy='worst',  # 'worst', 'oldest'
