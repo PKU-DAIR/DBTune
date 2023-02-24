@@ -338,13 +338,12 @@ class PipleLine(BOBase):
                 num_hps = self.num_hps_init + incremental_step * self.incremental_every
                 num_hps = min(num_hps, self.num_hps_max)
                 self.logger.info("['increase'] tune {} knobs".format(num_hps))
-                if not num_hps  == len(self.config_space.get_hyperparameter_names()):
+                if not num_hps  == len(self.config_space.get_hyperparameter_names()) or self.iteration_id == self.init_num:
                     self.knob_rank = list(json.load(open(self.knob_config_file)).keys())
                     #_, self.knob_rank = self.selector.knob_selection(self.config_space_all, self.history_container, self.num_hps_max)
                     new_config_space = ConfigurationSpace()
                     for knob in self.knob_rank[:num_hps]:
                         new_config_space.add_hyperparameter(self.config_space_all.get_hyperparameter(knob) )
-
                     logger.info("new configuration space: {}".format(new_config_space))
                     self.history_container.alter_configuration_space(new_config_space)
                     self.config_space = new_config_space
@@ -441,7 +440,6 @@ class PipleLine(BOBase):
     def evaluate(self, config):
         trial_state = SUCCESS
         start_time = time.time()
-
         objs, constraints, em, resource, im, info, trial_state = self.objective_function(config)
         if trial_state == FAILED :
             objs = self.FAILED_PERF
@@ -461,7 +459,7 @@ class PipleLine(BOBase):
         if self.optimizer_type in ['GA', 'TurBO', 'DDPG'] and not self.auto_optimizer:
             self.optimizer.update(observation)
 
-        if self.auto_optimizer and not self.space_transfer:
+        if not trial_state == FAILED and self.auto_optimizer and not self.space_transfer:
             self.optimizer_list[2].update(observation)
             self.optimizer_list[3].update(observation)
 
@@ -616,9 +614,8 @@ class PipleLine(BOBase):
                 knob_add = UniformIntegerHyperparameter(knob, transform(min_index), transform(max_index),
                                                     transform(default))
             except:
-                pdb.set_trace()
-                knob_add = UniformIntegerHyperparameter(knob, transform(min_index), transform(max_index),
-                                                        transform(default))
+                knob_add = UniformIntegerHyperparameter(knob, transform(min_index), transform(max_index), transform(default) - 2)
+
             target_space.add_hyperparameter(knob_add)
 
         print(target_space)
