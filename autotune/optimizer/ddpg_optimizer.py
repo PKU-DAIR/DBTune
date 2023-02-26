@@ -10,6 +10,7 @@ from autotune.utils.history_container import Observation, HistoryContainer
 from autotune.utils.config_space import Configuration, CategoricalHyperparameter
 from autotune.utils.config_space.util import configs2space, max_min_distance
 from autotune.utils.samplers import SobolSampler, LatinHypercubeSampler
+from sklearn.decomposition import PCA
 
 
 def create_output_folders():
@@ -49,7 +50,8 @@ class DDPG_Optimizer:
                  init_strategy="random_explore_first",
                  mean_var_file='',
                  batch_size=16,
-                 params=''):
+                 params='',
+                 pca=None):
 
         self.task_id = task_id
         self.config_space = config_space
@@ -71,8 +73,11 @@ class DDPG_Optimizer:
         self.t = 0
         self.score = 0
         self.episode_init = True
+        self.pca = pca
         create_output_folders()
         self.initialize(history_container)
+        if self.pca != None:
+            self.pca.fit(self.internal_metrics)
 
     def initialize(self, history_container):
         if self.mean_var_file != '' and os.path.exists(self.mean_var_file):
@@ -122,7 +127,10 @@ class DDPG_Optimizer:
             'model': self.params,
         }
 
-        self.model = DDPG(n_states=self.metrics_num,
+        im_num = self.metrics_num
+        if self.pca is not None:
+            im_num = self.pca.n_components
+        self.model = DDPG(n_states=im_num,
                           n_actions=len(self.config_space.get_hyperparameter_names()),
                           opt=ddpg_opt,
                           ouprocess=True,
@@ -133,8 +141,9 @@ class DDPG_Optimizer:
 
     def gen_mean_var(self):
         r = list()
+        dim = 65
         for im in self.internal_metrics:
-            if len(im) == 65:
+            if len(im) == dim:
                 r.append(im)
         r = np.array(r)
         self.state_mean = r.mean(axis=0)
@@ -161,9 +170,17 @@ class DDPG_Optimizer:
             return self.config_space.get_default_configuration()
 
         if np.random.random() < 0.7:  # avoid too nus reward in the fisrt 100 step
-            X_next = self.model.choose_action(self.state, 1 / (self.global_t + 1))
+            X_next = self.model.choose_action(self.state, 1 / (self.global_t + 1), pca=self.pca)
+            # if self.pca != None:
+            #     X_next = self.model.choose_action(self.pca.transform(np.array(self.state).reshape(1, -1)).squeeze(0), 1 / (self.global_t + 1))
+            # else:
+            #     X_next = self.model.choose_action(self.state, 1 / (self.global_t + 1))
         else:
-            X_next = self.model.choose_action(self.state, 1)
+            X_next = self.model.choose_action(self.state, 1, pca=self.pca)
+            # if self.pca != None:
+            #     X_next = self.model.choose_action(self.pca.transform(np.array(self.state).reshape(1, -1)).squeeze(0), 1)
+            # else:
+            #     X_next = self.model.choose_action(self.state, 1)
 
         return action2config(X_next, self.config_space)
 
@@ -189,6 +206,7 @@ class DDPG_Optimizer:
 
         reward = self.get_reward(observation.objs[0])
         self.last_external_metrics = observation.objs[0]
+        # state saves original internal metrics
         next_state = observation.IM
         self.t += 1
         self.global_t += 1
@@ -199,17 +217,18 @@ class DDPG_Optimizer:
         if done or self.score < -50:
             self.episode_init = True
 
-        self.model.add_sample(self.state, config2action(observation.config, self.config_space), reward, next_state, done)
+        self.model.add_sample(self.state, config2action(observation.config, self.config_space), reward, next_state, done, pca=self.pca)
         self.state = next_state
 
         if len(self.model.replay_memory) > self.batch_size:
             losses = []
 
             for _ in range(4):
-                losses.append(self.model.update())
+                losses.append(self.model.update(pca=self.pca))
 
-        if self.global_t % 5 == 0:
-            self.model.save_model('model_params', title='{}_{}'.format(self.task_id, self.global_t))
+        # %5 -> %10
+        if self.global_t % 10 == 0:
+            self.model.save_model(os.getcwd() + '/model_params', title='{}_{}'.format(self.task_id, self.global_t))
             self.logger.info('Save model_params to %s_%s' % (self.task_id, self.global_t))
 
     def get_reward(self, external_metrics):

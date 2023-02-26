@@ -27,7 +27,11 @@ class KnobSelector(ABC):
         self.selector_type = selector_type
 
     def knob_selection(self,  config_space, history_container, num_hps, **kwargs):
-        if self.selector_type == 'shap':
+        # add random forest to select knobs for ddpg
+        print("Knob selection: ", self.selector_type)
+        if self.selector_type == 'rf':
+            return self.knob_selection_rf(config_space, history_container, num_hps, **kwargs)
+        elif self.selector_type == 'shap':
             return self.knob_selection_shap( config_space, history_container, num_hps, **kwargs)
         elif self.selector_type == 'fanova':
             return self.knob_selection_fanova(config_space, history_container, num_hps, **kwargs)
@@ -37,6 +41,36 @@ class KnobSelector(ABC):
            return self.knob_selection_ablation(config_space, history_container, num_hps, **kwargs)
         elif self.selector_type == 'lasso':
             return self.knob_selection_lasso(config_space, history_container, num_hps, **kwargs)
+
+
+    def knob_selection_rf(self, config_space, history_container, num_hps, use_imcub=True, prediction=True):
+        columns = history_container.config_space_all.get_hyperparameter_names()
+        X_df = config2df(history_container.configurations_all)
+        X_df = X_df[columns]
+        y_df = np.array(history_container.get_transformed_perfs().astype('float'))
+
+        le = LabelEncoder()
+        for col in list(X_df.columns):
+            if isinstance(history_container.config_space_all.get_hyperparameters_dict()[col], CategoricalHyperparameter):
+                le.fit(X_df[col])
+                X_df[col] = le.transform(X_df[col])
+            else:
+                X_df[col] = X_df[col].astype('float')
+
+        rf = RandomForestRegressor()
+        rf.fit(X_df, y_df)
+        sorted_knobs = sorted(zip(map(lambda x:round(x,4),rf.feature_importances_), columns), reverse=True)
+        for i in range(num_hps):
+            self.logger.info("Top{}: {}, its importance is {:.4}".format(i + 1, sorted_knobs[i][1], sorted_knobs[i][0]))
+        # print(sorted_knobs, len(sorted_knobs))
+        rank = [sorted_knobs[i][1] for i in range(num_hps)]
+
+        hps = config_space.get_hyperparameters_dict()
+        cs_new = ConfigurationSpace()
+        for i in range(num_hps):
+            cs_new.add_hyperparameter(hps[sorted_knobs[i][1]])
+
+        return cs_new, rank
 
 
     def knob_selection_shap(self, config_space, history_container, num_hps, use_imcub = True, prediction=True):

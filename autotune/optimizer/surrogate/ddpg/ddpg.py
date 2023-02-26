@@ -59,15 +59,17 @@ class Normalizer(object):
         self.mean = mean
         self.std = np.sqrt(variance+0.00001)
 
-    def normalize(self, x):
+    def normalize(self, x, pca=None):
         if isinstance(x, list):
             x = np.array(x)
         x = x - self.mean
         x = x / self.std
+        if pca is not None:
+            x = pca.transform(x)
         return Variable(torch.FloatTensor(x))
 
-    def __call__(self, x, *args, **kwargs):
-        return self.normalize(x)
+    def __call__(self, x, pca=None, *args, **kwargs):
+        return self.normalize(x, pca=pca)
 
 
 class Actor(nn.Module):
@@ -285,13 +287,13 @@ class DDPG(object):
 
         return idx, states, next_states, actions, rewards, terminates
 
-    def add_sample(self, state, action, reward, next_state, terminate):
+    def add_sample(self, state, action, reward, next_state, terminate, pca=None):
         self.critic.eval()
         self.actor.eval()
         self.target_critic.eval()
         self.target_actor.eval()
-        batch_state = self.normalizer([state])
-        batch_next_state = self.normalizer([next_state])
+        batch_state = self.normalizer([state], pca=pca)
+        batch_next_state = self.normalizer([next_state], pca=pca)
         current_value = self.critic(batch_state, DDPG.totensor([action.tolist()]))
         target_action = self.target_actor(batch_next_state)
         target_value = DDPG.totensor([reward]) \
@@ -314,12 +316,12 @@ class DDPG(object):
         self.logger.info('[ddpg] critic_MSE: {}'.format(delta_value))
         return delta_action,delta_value
 
-    def update(self):
+    def update(self, pca=None):
         """ Update the Actor and Critic with a batch data
         """
         idxs, states, next_states, actions, rewards, terminates = self._sample_batch()
-        batch_states = self.normalizer(states)
-        batch_next_states = self.normalizer(next_states)
+        batch_states = self.normalizer(states, pca=pca)
+        batch_next_states = self.normalizer(next_states, pca=pca)
         batch_actions = DDPG.totensor(actions)
         batch_rewards = DDPG.totensor(rewards)
 
@@ -367,13 +369,13 @@ class DDPG(object):
 
         return loss.item(), policy_loss.item()
 
-    def choose_action(self, x, coff=1):
+    def choose_action(self, x, coff=1, pca=None):
         """ Select Action according to the current state
         Args:
             x: np.array, current state
         """
         self.actor.eval()
-        act = self.actor(self.normalizer([x])).squeeze(0)
+        act = self.actor(self.normalizer([x], pca=pca)).squeeze(0)
         self.actor.train()
         action = act.data.numpy()
         # self.logger.info('Action before OUProcess: {}'.format(action))
