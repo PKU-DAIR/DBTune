@@ -295,7 +295,7 @@ class DBEnv:
 
 
     def step_GP(self, knobs, collect_resource=True):
-        #return False, np.random.rand(6), np.random.rand(65), np.random.rand(8)
+        return False, np.random.rand(6), np.random.rand(65), np.random.rand(8)
         # re-init database if activated
         if self.reinit_interval > 0 and self.reinit_interval % RESTART_FREQUENCY == 0:
             if self.reinit:

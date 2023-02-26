@@ -217,15 +217,18 @@ def estimate_size(space, configfile):
     KNOBS = initialize_knobs(configfile, -1)
 
     sizes = []
+    # To avoid HP object error ... do not know how to fix
     for hp in space._hyperparameters.values():
         name = hp.name
         if KNOBS[name]['type'] == 'enum':
-            sizes.append(hp.get_size())
+            # sizes.append(hp.get_size())
+            sizes.append(len(hp.choices))
         else:
             if KNOBS[name]['max'] - KNOBS[name]['min'] > 10000:
-                size = hp.get_size()/(KNOBS[name]['max'] - KNOBS[name]['min']) * 10000
-                if size < 1:
-                    size = 1
+                # size = hp.get_size()/(KNOBS[name]['max'] - KNOBS[name]['min']) * 10000
+                # if size < 1:
+                #     size = 1
+                size = 1
                 sizes.append(size )
     if len(sizes) == 0:
         return 0.0

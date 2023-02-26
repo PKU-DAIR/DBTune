@@ -1,3 +1,6 @@
+import sys, os
+sys.path.append(r"/home/tzjfxz/DBTune")
+
 from autotune.utils.config import parse_args
 from autotune.database.mysqldb import MysqlDB
 from autotune.database.postgresqldb import PostgresqlDB

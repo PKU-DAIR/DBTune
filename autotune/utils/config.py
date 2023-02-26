@@ -47,19 +47,22 @@ def get_default_dict(dic):
         if key not in config_dic.keys() or config_dic[key] == '':
             config_dic[key] = default_value[key]
     for key in auto_setting:
+        # Remain and tune all knob at first
         if config_dic[key] == 'auto':
             if key == 'knob_num':
-                if  len(knob_config.keys()) < 40:
-                    config_dic['knob_num'] = len(knob_config.keys())
-                else:
-                    config_dic['knob_num'] = 40
+                # if  len(knob_config.keys()) < 40:
+                #     config_dic['knob_num'] = len(knob_config.keys())
+                # else:
+                #     config_dic['knob_num'] = 40
+                config_dic['knob_num'] = len(knob_config.keys())
             if key == 'initial_tunable_knob_num':
                 if config_dic['incremental'].lower() == 'decrease':
                     config_dic['initial_tunable_knob_num'] =  config_dic['knob_num']
                 elif config_dic['incremental'].lower() == 'increase':
                     config_dic['initial_tunable_knob_num'] = 5
                 else:
-                    config_dic['initial_tunable_knob_num'] = int(int(config_dic['knob_num'])/2)
+                    # config_dic['initial_tunable_knob_num'] = int(int(config_dic['knob_num'])/2)
+                    config_dic['initial_tunable_knob_num'] = int(config_dic['knob_num'])
             if key ==  'incremental_every':
                 if config_dic['incremental'].lower() == 'decrease':
                     config_dic['incremental_every'] =  int(config_dic['max_runs'] / (config_dic['initial_tunable_knob_num'] / config_dic['incremental_num'])) + 1
