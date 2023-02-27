@@ -44,6 +44,7 @@ from autotune.knobs import ts, logger
 from sklearn.decomposition import PCA
 # dimension may be changed
 pca = PCA(n_components=13)
+DDPG_iter = 140
 
 class PipleLine(BOBase):
     """
@@ -144,8 +145,8 @@ class PipleLine(BOBase):
                 with open("tools/{}_best_optimizer.pkl".format(hold_out_workload), 'rb') as f:
                     self.best_method_id_list = pickle.load(f)
 
-        # self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/data2/ruike/DBTune/scripts/experiment/gen_knobs/mysql_all_197_32G.json')))
-        self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/home/tzjfxz/DBTune/scripts/tpch_system_wide.json')))
+        self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/data2/ruike/DBTune/scripts/experiment/gen_knobs/mysql_all_197_32G.json')))
+        #self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/home/tzjfxz/DBTune/scripts/tpch_system_wide.json')))
         advisor_kwargs = advisor_kwargs or {}
         # init history container
         if self.num_objs == 1:
@@ -279,10 +280,9 @@ class PipleLine(BOBase):
     def run(self):
         # init: self.optimizer=BO
         compact_space = None
-        cnt = 0
         for _ in tqdm(range(self.iteration_id, self.max_iterations)):
             # change from GA to DDPG from 140
-            if cnt == self.initial_runs:
+            if self.iteration_id == DDPG_iter:
                 optimizer = DDPG_Optimizer(
                     config_space=self.optimizer.config_space,
                     history_container=self.history_container,
@@ -294,7 +294,7 @@ class PipleLine(BOBase):
                     pca=pca
                 )
                 self.optimizer = optimizer
-            cnt += 1
+
             if self.budget_left < 0:
                 self.logger.info('Time %f elapsed!' % self.runtime_limit)
                 break
@@ -338,7 +338,7 @@ class PipleLine(BOBase):
                 space = compact_space if not compact_space is None else self.config_space
                 self.logger.info("[Iteration {}] [{},{}] Total space size:{}".format(self.iteration_id,self.space_step , self.space_step_limit, estimate_size(space, self.knob_config_file)))
 
-            _ , _, _, objs = self.iterate(cnt, compact_space)
+            _ , _, _, objs = self.iterate( compact_space)
 
             # determine whether explore one more step in the space
             if (self.space_transfer or self.auto_optimizer) and  len(self.history_container.get_incumbents()) > 0 and objs[0] < self.history_container.get_incumbents()[0][1]:
@@ -353,7 +353,7 @@ class PipleLine(BOBase):
 
         return self.get_history()
 
-    def knob_selection(self, iter: int):
+    def knob_selection(self):
         assert self.num_objs == 1
 
         if self.iteration_id < self.init_num and not self.incremental == 'increase':
@@ -361,7 +361,7 @@ class PipleLine(BOBase):
 
         if self.incremental == 'none':
             # if self.num_hps_init == -1 or self.num_hps_init == len(self.config_space.get_hyperparameter_names()):
-            if (self.num_hps_init == -1 or self.num_hps_init == len(self.config_space.get_hyperparameter_names())) and iter != self.initial_runs + 1:
+            if self.iteration_id != DDPG_iter + 1:
                 return
 
             # Switch to compact space with new DDPG, operate on "initial_runs"
@@ -447,8 +447,8 @@ class PipleLine(BOBase):
         return self.optimizer_list[idx]
 
 
-    def iterate(self, iter: int, compact_space=None):
-        self.knob_selection(iter)
+    def iterate(self, compact_space=None):
+        self.knob_selection()
         # get configuration suggestion
         print("Optimizer: ", type(self.optimizer).__name__)
         if self.space_transfer and len(self.history_container.configurations) < self.init_num:
