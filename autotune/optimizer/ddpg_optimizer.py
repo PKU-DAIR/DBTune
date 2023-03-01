@@ -171,16 +171,8 @@ class DDPG_Optimizer:
 
         if np.random.random() < 0.7:  # avoid too nus reward in the fisrt 100 step
             X_next = self.model.choose_action(self.state, 1 / (self.global_t + 1), pca=self.pca)
-            # if self.pca != None:
-            #     X_next = self.model.choose_action(self.pca.transform(np.array(self.state).reshape(1, -1)).squeeze(0), 1 / (self.global_t + 1))
-            # else:
-            #     X_next = self.model.choose_action(self.state, 1 / (self.global_t + 1))
         else:
             X_next = self.model.choose_action(self.state, 1, pca=self.pca)
-            # if self.pca != None:
-            #     X_next = self.model.choose_action(self.pca.transform(np.array(self.state).reshape(1, -1)).squeeze(0), 1)
-            # else:
-            #     X_next = self.model.choose_action(self.state, 1)
 
         return action2config(X_next, self.config_space)
 
@@ -226,8 +218,7 @@ class DDPG_Optimizer:
             for _ in range(4):
                 losses.append(self.model.update(pca=self.pca))
 
-        # %5 -> %10
-        if self.global_t % 10 == 0:
+        if self.global_t % 5 == 0:
             self.model.save_model(os.getcwd() + '/model_params', title='{}_{}'.format(self.task_id, self.global_t))
             self.logger.info('Save model_params to %s_%s' % (self.task_id, self.global_t))
 
