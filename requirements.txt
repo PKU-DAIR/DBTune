@@ -3,7 +3,7 @@ numpy
 scikit_learn==0.22.2.post1
 torch>=1.5.0
 mysql-connector-python-rf
-ConfigSpace
+ConfigSpace==0.4.21
 openbox
 hyperopt
 botorch
