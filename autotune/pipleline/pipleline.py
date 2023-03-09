@@ -283,6 +283,7 @@ class PipleLine(BOBase):
         for _ in tqdm(range(self.iteration_id, self.max_iterations)):
             # change from GA to DDPG from 140
             if self.iteration_id == DDPG_iter:
+                self.optimizer_type = 'DDPG'
                 optimizer = DDPG_Optimizer(
                     config_space=self.optimizer.config_space,
                     history_container=self.history_container,
@@ -512,7 +513,8 @@ class PipleLine(BOBase):
         self.history_container.update_observation(observation)
 
         if self.optimizer_type in ['GA', 'TurBO', 'DDPG'] and not self.auto_optimizer:
-            self.optimizer.update(observation)
+            if not self.optimizer_type == 'DDPG' or (not trial_state == FAILED):
+                self.optimizer.update(observation)
 
         if not trial_state == FAILED and self.auto_optimizer and not self.space_transfer:
             self.optimizer_list[2].update(observation)
