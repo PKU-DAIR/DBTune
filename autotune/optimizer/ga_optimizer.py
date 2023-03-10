@@ -91,6 +91,14 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
         -------
         A configuration.
         """
+        num_config_evaluated = len(history_container.configurations)
+
+        if num_config_evaluated == 0:
+            default_config = self.config_space.get_default_configuration()
+            self.all_configs.add(default_config)
+            self.running_configs.append(default_config)
+        return default_config
+
         # Get next suggestion if already
         if not self.last_suggestions:
             self.update_observations(self.last_observations)
