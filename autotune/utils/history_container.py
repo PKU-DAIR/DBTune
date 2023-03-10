@@ -439,6 +439,7 @@ class HistoryContainer(object):
         configurations = []
         data = collections.OrderedDict()
 
+        self.incumbents.clear()
         for i in range(len(self.configurations)):
             config = self.configurations_all[i]
             config_new = {}
@@ -452,6 +453,8 @@ class HistoryContainer(object):
             configurations.append(c_new)
             perf = self.perfs[i]
             data[c_new] = perf
+            if perf <= self.incumbent_value:
+                self.incumbents.append((c_new, perf))
 
         self.configurations = configurations
         self.data = data
