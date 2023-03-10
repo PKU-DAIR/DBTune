@@ -74,6 +74,7 @@ class DDPG_Optimizer:
         self.score = 0
         self.episode_init = True
         self.pca = pca
+        self.suggest_step = 1
         create_output_folders()
         self.initialize(history_container)
         if self.pca != None:
@@ -174,10 +175,19 @@ class DDPG_Optimizer:
             self.score = 0
             return self.config_space.get_default_configuration()
 
-        if np.random.random() < 0.7:  # avoid too nus reward in the fisrt 100 step
-            X_next = self.model.choose_action(self.state, 1 / (self.global_t + 1), pca=self.pca)
+        # if np.random.random() < 0.7:  # avoid too nus reward in the fisrt 100 step
+        #     X_next = self.model.choose_action(self.state, 1 / (self.global_t + 1), pca=self.pca)
+        # else:
+        #     X_next = self.model.choose_action(self.state, 1, pca=self.pca)
+        pc = 1 - 1 / (1.4 * self.suggest_step)
+        if np.random.random() < pc:
+            X_next = self.model.choose_action(self.state, 0, pca=self.pca)
         else:
-            X_next = self.model.choose_action(self.state, 1, pca=self.pca)
+            X_next = config2action(history_container.incumbents[0][0], self.config_space)
+            X_next += self.model.noise.noise()
+            X_next = X_next.clip(0, 1)
+
+        self.suggest_step += 1
 
         return action2config(X_next, self.config_space)
 
