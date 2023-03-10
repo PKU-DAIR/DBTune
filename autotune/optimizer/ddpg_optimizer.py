@@ -77,7 +77,12 @@ class DDPG_Optimizer:
         create_output_folders()
         self.initialize(history_container)
         if self.pca != None:
-            self.pca.fit(self.internal_metrics)
+            dim = 65
+            r = list()
+            for im in self.internal_metrics:
+                if len(im) == dim:
+                    r.append(im)
+            self.pca.fit(np.array(r))
 
     def initialize(self, history_container):
         if self.mean_var_file != '' and os.path.exists(self.mean_var_file):
