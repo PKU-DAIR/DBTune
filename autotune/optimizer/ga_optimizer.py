@@ -97,7 +97,7 @@ class GA_Optimizer(object, metaclass=abc.ABCMeta):
             default_config = self.config_space.get_default_configuration()
             self.all_configs.add(default_config)
             self.running_configs.append(default_config)
-        return default_config
+            return default_config
 
         # Get next suggestion if already
         if not self.last_suggestions:

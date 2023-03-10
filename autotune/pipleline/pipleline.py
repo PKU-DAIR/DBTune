@@ -281,21 +281,6 @@ class PipleLine(BOBase):
         # init: self.optimizer=BO
         compact_space = None
         for _ in tqdm(range(self.iteration_id, self.max_iterations)):
-            # change from GA to DDPG from 140
-            if self.iteration_id == DDPG_iter:
-                self.optimizer_type = 'DDPG'
-                optimizer = DDPG_Optimizer(
-                    config_space=self.optimizer.config_space,
-                    history_container=self.history_container,
-                    metrics_num=pca.n_components,
-                    task_id='ddpg_task',
-                    params=self.kwargs['params'],
-                    batch_size=self.kwargs['batch_size'],
-                    mean_var_file=self.kwargs['mean_var_file'],
-                    pca=pca
-                )
-                self.optimizer = optimizer
-
             if self.budget_left < 0:
                 self.logger.info('Time %f elapsed!' % self.runtime_limit)
                 break
@@ -362,7 +347,7 @@ class PipleLine(BOBase):
 
         if self.incremental == 'none':
             # if self.num_hps_init == -1 or self.num_hps_init == len(self.config_space.get_hyperparameter_names()):
-            if self.iteration_id != DDPG_iter + 1:
+            if  self.iteration_id < DDPG_iter  or (self.iteration_id >= DDPG_iter and self.optimizer_type == 'DDPG'):
                 return
 
             # Switch to compact space with new DDPG, operate on "initial_runs"
@@ -450,6 +435,20 @@ class PipleLine(BOBase):
 
     def iterate(self, compact_space=None):
         self.knob_selection()
+        # change from GA to DDPG from 140
+        if self.iteration_id == DDPG_iter:
+            self.optimizer_type = 'DDPG'
+            optimizer = DDPG_Optimizer(
+                config_space=self.config_space,
+                history_container=self.history_container,
+                metrics_num=pca.n_components,
+                task_id='ddpg_task',
+                params=self.kwargs['params'],
+                batch_size=self.kwargs['batch_size'],
+                mean_var_file=self.kwargs['mean_var_file'],
+                pca=pca
+            )
+            self.optimizer = optimizer
         # get configuration suggestion
         print("Optimizer: ", type(self.optimizer).__name__)
         if self.space_transfer and len(self.history_container.configurations) < self.init_num:
