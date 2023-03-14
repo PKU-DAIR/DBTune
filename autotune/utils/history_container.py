@@ -694,13 +694,13 @@ class HistoryContainer(object):
         else:
             return  sum(default_list)/len(default_list)
 
-    def get_promising_space(self, quantile_threshold=0):
+    def get_promising_space(self, quantile_threshold=0, respect=False):
         y = - self.get_transformed_perfs()
         if quantile_threshold == 0:
             performance_threshold = - self.get_default_performance()
         else:
             performance_threshold = np.quantile(y, quantile_threshold)
-            if performance_threshold <  - self.get_default_performance():
+            if performance_threshold <  - self.get_default_performance() and not respect:
                 performance_threshold = - self.get_default_performance()
 
         X = convert_configurations_to_array(self.configurations)

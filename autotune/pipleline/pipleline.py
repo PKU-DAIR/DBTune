@@ -78,6 +78,8 @@ class PipleLine(BOBase):
                  auto_optimizer_type='learned',
                  hold_out_workload=None,
                  history_workload_data=None,
+                 only_knob = False,
+                 only_range = False,
                  advisor_kwargs: dict = None,
                  **kwargs
                  ):
@@ -105,6 +107,8 @@ class PipleLine(BOBase):
         self.random_state = random_state
         self.current_context = None
         self.space_transfer = space_transfer
+        self.only_knob = only_knob
+        self.only_range = only_range
         self.knob_config_file = knob_config_file
         self.auto_optimizer = auto_optimizer
         if space_transfer or auto_optimizer:
@@ -134,6 +138,7 @@ class PipleLine(BOBase):
                 self.ranker.load_model("tools/xgboost_test_{}.json".format(hold_out_workload))
                 self.history_workload_data =  history_workload_data
             elif auto_optimizer_type == 'best':
+                # self.best_method_id_list = [3] * 50 + [1] * 150
                 with open("tools/{}_best_optimizer.pkl".format(hold_out_workload), 'rb') as f:
                     self.best_method_id_list = pickle.load(f)
 
@@ -420,7 +425,7 @@ class PipleLine(BOBase):
 
     def iterate(self, compact_space=None):
         self.knob_selection()
-        # get configuration suggestion
+        #get configuration suggestion
         if self.space_transfer and len(self.history_container.configurations) < self.init_num:
             #space transfer: use best source config to init
             config = self.initial_configurations[len(self.history_container.configurations)]
@@ -556,6 +561,7 @@ class PipleLine(BOBase):
                 quantile = 0
 
             pruned_space = surrogate_list[j].get_promising_space(quantile)
+            self.logger.info(pruned_space)
             pruned_space_list.append(pruned_space)
             total_imporve = sum([pruned_space[key][2] for key in list(pruned_space.keys())])
             for key in pruned_space.keys():
@@ -566,10 +572,20 @@ class PipleLine(BOBase):
                             [similarity_list[i] for i in sample_list])
 
         # remove unimportant knobs
-        important_knobs = list()
-        for key in important_dict.keys():
-            if important_dict[key] >= 0:
-                important_knobs.append(key)
+        if self.only_range:
+            important_knobs =  self.config_space.get_hyperparameter_names()
+        else:
+            important_knobs = list()
+            for key in important_dict.keys():
+                if important_dict[key] >= 0:
+                    important_knobs.append(key)
+
+        if self.only_knob:
+            target_space = ConfigurationSpace()
+            for knob in important_knobs:
+                target_space.add_hyperparameter(self.config_space.get_hyperparameters_dict()[knob])
+            self.logger.info(target_space)
+            return target_space
 
         # generate target pruned space
         default_array = self.config_space.get_default_configuration().get_array()
@@ -634,13 +650,24 @@ class PipleLine(BOBase):
             if default > max_index:
                 default = max_index
             transform = self.config_space.get_hyperparameters_dict()[knob]._transform
+            retry = False
             try:
-                knob_add = UniformIntegerHyperparameter(knob, transform(min_index), transform(max_index),
-                                                    transform(default))
+                knob_add = UniformIntegerHyperparameter(knob, transform(min_index), transform(max_index), transform(default))
             except:
-                knob_add = UniformIntegerHyperparameter(knob, transform(min_index), transform(max_index), transform(default) - 2)
+                retry = True
+            i = 1
+            while retry:
+                try:
+                    if transform(default) - 2 * i < transform(min_index):
+                        break
+                    knob_add = UniformIntegerHyperparameter(knob, transform(min_index), transform(max_index), transform(default) - 2 * i )
+                    i += 1
+                    retry = False
+                except:
+                    retry = True
 
-            target_space.add_hyperparameter(knob_add)
+            if not retry:
+                target_space.add_hyperparameter(knob_add)
 
-        print(target_space)
+        self.logger.info(target_space)
         return target_space

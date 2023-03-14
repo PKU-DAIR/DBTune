@@ -85,7 +85,6 @@ class DBTuner:
                 self.surrogate_type = 'gp'
             elif self.method == 'auto':
                 self.surrogate_type = 'auto'
-
         elif self.transfer_framework in ['workload_map', 'rgpe']:
             self.load_history(int(self.args_db['knob_num']))
             if self.method == 'SMAC':
@@ -124,7 +123,7 @@ class DBTuner:
         file_dict = defaultdict(list)
         history_workload_data = list()
         workloadL= [ 'sysbench', 'twitter', 'job', 'tpch']
-        workloadL.remove(self.args_db['workload'])
+        workloadL.remove(self.args_db['workload'] if '_' not in self.args_db['workload'] else self.args_db['workload'].split('_')[1] )
         files = os.listdir(self.hc_path)
         config_space = self.setup_configuration_space(self.args_db['knob_config_file'], int(self.args_db['knob_num']))
         for f in files:
@@ -172,7 +171,9 @@ class DBTuner:
                        auto_optimizer=self.auto_optimizer,
                        auto_optimizer_type= self.args_tune['auto_optimizer_type'],
                        hold_out_workload=self.args_db['workload'],
-                       history_workload_data=self.history_workload_data)
+                       history_workload_data=self.history_workload_data,
+                       only_knob=eval(self.args_tune['only_knob']),
+                       only_range=eval(self.args_tune['only_range']))
         history = bo.run()
         if history.num_objs == 1:
             import matplotlib.pyplot as plt
