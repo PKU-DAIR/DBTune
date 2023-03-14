@@ -36,7 +36,11 @@ def action2config(action, config_space):
         if type(config_space.get_hyperparameters_dict()[key]) == CategoricalHyperparameter:
             action[i] = np.round( action[i] * (config_space.get_hyperparameters_dict()[key].num_choices - 1))
         knob_dict[key] = transform(action[i])
-
+        if not type(config_space.get_hyperparameters_dict()[key]) == CategoricalHyperparameter:
+            if knob_dict[key] < config_space.get_hyperparameters_dict()[key].lower:
+                knob_dict[key] = config_space.get_hyperparameters_dict()[key].lower
+            if knob_dict[key] > config_space.get_hyperparameters_dict()[key].upper:
+                knob_dict[key] = config_space.get_hyperparameters_dict()[key].upper
     return Configuration(config_space, values=knob_dict)
 
 
