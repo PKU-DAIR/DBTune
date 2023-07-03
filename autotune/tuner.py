@@ -52,7 +52,7 @@ class DBTuner:
                                                         default_value=int(value['default'] / 1000))
                 else:
                     knob = UniformIntegerHyperparameter(name, min_val, max_val, default_value=value['default'])
-            elif knob_type == 'float':
+            elif knob_type == 'float' or knob_type == 'real':
                 min_val, max_val = value['min'], value['max']
                 knob = UniformFloatHyperparameter(name, min_val, max_val, default_value=value['default'])
             else:
