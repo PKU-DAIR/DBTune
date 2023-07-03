@@ -129,7 +129,7 @@ class PostgresqlDB:
         return knobs_not_in_cnf
 
     def _kill_postgres(self):
-        kill_cmd = '{} stop'.format(self.pg_ctl)
+        kill_cmd = '{} stop -D {}'.format(self.pg_ctl, self.pgdata)
         force_kill_cmd1 = "ps aux|grep '" + self.sock + "'|awk '{print $2}'|xargs kill -9"
         force_kill_cmd2 = "ps aux|grep '" + self.pgcnf + "'|awk '{print $2}'|xargs kill -9"
 
@@ -169,7 +169,7 @@ class PostgresqlDB:
             ssh.connect(self.host, username=self.ssh_user, pkey=self.pk,
                         disabled_algorithms={'pubkeys': ['rsa-sha2-256', 'rsa-sha2-512']})
 
-            start_cmd = '{} --config_file={}'.format(self.postgres, self.pgcnf)
+            start_cmd = '{} --config_file={} -D {}'.format(self.postgres, self.pgcnf, self.pgdata)
             wrapped_cmd = 'echo $$; exec ' + start_cmd
             _, start_stdout, _ = ssh.exec_command(wrapped_cmd)
             self.pid = int(start_stdout.readline())
@@ -187,7 +187,7 @@ class PostgresqlDB:
                     logger.info('Failed: add {} to memory,cpuset:server'.format(self.pid))
 
         else:
-            proc = subprocess.Popen([self.postgres, '--config_file={}'.format(self.pgcnf)])
+            proc = subprocess.Popen([self.postgres, '--config_file={}'.format(self.pgcnf), '-D',  self.pgdata])
             self.pid = proc.pid
             if self.isolation_mode:
                 command = 'sudo cgclassify -g memory,cpuset:server ' + str(self.pid)

@@ -15,6 +15,7 @@ from .resource_monitor import ResourceMonitor
 from autotune.workload import SYSBENCH_WORKLOAD, JOB_WORKLOAD, OLTPBENCH_WORKLOADS, TPCH_WORKLOAD
 from autotune.utils.constants import MAXINT, SUCCESS, FAILED, TIMEOUT
 from autotune.utils.parser import is_number
+from autotune.database.postgresqldb import PostgresqlDB
 
 
 class DBEnv:
@@ -160,7 +161,11 @@ class DBEnv:
         filename = self.log_path + '/{}.log'.format(timestamp)
         dirname, _ = os.path.split(os.path.abspath(__file__))
         if self.workload['name'] == 'sysbench':
-            cmd = self.workload['cmd'].format(dirname + '/cli/run_sysbench.sh',
+            if(isinstance(self.db, PostgresqlDB)):
+                exe_file =  '/cli/run_sysbench_postgresql.sh'
+            else:
+                exe_file = '/cli/run_sysbench.sh'
+            cmd = self.workload['cmd'].format(dirname + exe_file,
                                               self.workload['type'],
                                               self.db.host,
                                               self.db.port,
@@ -218,6 +223,7 @@ class DBEnv:
         # start Benchmark
         benchmark_timeout = False
         cmd, filename = self.get_benchmark_cmd()
+        print(cmd)
         print("[{}] benchmark start!".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
         p_benchmark = subprocess.Popen(cmd, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE,
                                        close_fds=True)
