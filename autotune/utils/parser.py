@@ -98,8 +98,9 @@ def parse_sysbench(file_path):
         qpsL.append(float(i[1]))
     num_samples = len(temporal)
     global num_samples_normal
-    if num_samples >= num_samples_normal * 0.8:
+    if num_samples_normal == 0:
         num_samples_normal = num_samples
+    if num_samples >= num_samples_normal * 0.8:
         tps /= num_samples
         qps /= num_samples
         latency /= num_samples

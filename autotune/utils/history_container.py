@@ -332,8 +332,10 @@ class HistoryContainer(object):
                 config_dict.pop(knob)
             for knob in knobs_add:
                 config_dict[knob] = knobs_default[knob]
-
-            config = Configuration(self.config_space, config_dict)
+            try:
+                config = Configuration(self.config_space, config_dict)
+            except:
+                continue
             em = tmp['external_metrics']
             im = tmp['internal_metrics']
             resource = tmp['resource']
