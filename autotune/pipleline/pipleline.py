@@ -142,7 +142,8 @@ class PipleLine(BOBase):
                 with open("tools/{}_best_optimizer.pkl".format(hold_out_workload), 'rb') as f:
                     self.best_method_id_list = pickle.load(f)
 
-        self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/data2/ruike/DBTune/scripts/experiment/gen_knobs/mysql_all_197_32G.json')))
+        self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/data2/ruike/DBTune/scripts/experiment/gen_knobs/postgres_all.json')))
+        self.iter_begin_time = time.time()
         advisor_kwargs = advisor_kwargs or {}
         # init history container
         if self.num_objs == 1:
@@ -263,7 +264,11 @@ class PipleLine(BOBase):
 
     def get_max_distence_best(self):
         default_config = self.config_space.get_default_configuration()
-        candidate_configs = [history_container.incumbents[0][0] for history_container in self.history_bo_data]
+        candidate_configs = list()
+        for  history_container in self.history_bo_data:
+            if len(history_container.incumbents):
+                candidate_configs.append(history_container.incumbents[0][0])
+
         return  max_min_distance(default_config=default_config, src_configs=candidate_configs, num=self.init_num)
 
     def get_history(self):
@@ -279,19 +284,27 @@ class PipleLine(BOBase):
             if self.budget_left < 0:
                 self.logger.info('Time %f elapsed!' % self.runtime_limit)
                 break
-
+            time_b = time.time()
             start_time = time.time()
-            self.iter_begin_time = start_time
             # get another compact space
             if (self.space_transfer or self.auto_optimizer) and (self.space_step >= self.space_step_limit):
                 self.space_step_limit = 3
                 self.space_step = 0
                 if self.space_transfer:
+                    f = open('space.record','a')
+                    time_b = time.time()
                     compact_space = self.get_compact_space()
+                    f.write(str(time.time() - time_b)+'\n')
+                    f.close()
 
                 if self.auto_optimizer:
+                    f = open('optimizer.record', 'a')
+                    time_b = time.time()
                     self.optimizer = self.select_optimizer(type=self.auto_optimizer_type, space=self.config_space if compact_space is None else compact_space)
+                    f.write(str(time.time() - time_b) + '\n')
+                    f.close()
 
+                time_b = time.time()
                 if self.space_transfer and not compact_space == self.optimizer.config_space:
                     if isinstance(self.optimizer, GA_Optimizer):
                         self.optimizer = GA_Optimizer(compact_space,
@@ -319,7 +332,10 @@ class PipleLine(BOBase):
                 space = compact_space if not compact_space is None else self.config_space
                 self.logger.info("[Iteration {}] [{},{}] Total space size:{}".format(self.iteration_id,self.space_step , self.space_step_limit, estimate_size(space, self.knob_config_file)))
 
+            f = open('all.record', 'a')
             _ , _, _, objs = self.iterate(compact_space)
+            f.write(str(time.time() - time_b) + '\n')
+            f.close()
 
             # determine whether explore one more step in the space
             if (self.space_transfer or self.auto_optimizer) and  len(self.history_container.get_incumbents()) > 0 and objs[0] < self.history_container.get_incumbents()[0][1]:
@@ -392,6 +408,15 @@ class PipleLine(BOBase):
             idx = random.choices([i for i in range(len(self.optimizer_list))])[0]
             self.logger.info("select {}".format(optimizer_name[idx]))
             return self.optimizer_list[idx]
+
+        if type == 'two_phase':
+            if self.iteration_id < 140:
+                idx = -1
+            else:
+                idx = -2
+            self.logger.info("select {}".format(optimizer_name[idx]))
+            return self.optimizer_list[idx]
+
 
         if type == 'best':
             idx = self.best_method_id_list[self.iteration_id]
@@ -467,6 +492,7 @@ class PipleLine(BOBase):
             self.optimizer.surrogate_model.current_context =  context
 
     def evaluate(self, config):
+        iter_time = time.time() - self.iter_begin_time
         trial_state = SUCCESS
         start_time = time.time()
         objs, constraints, em, resource, im, info, trial_state = self.objective_function(config)
@@ -474,7 +500,8 @@ class PipleLine(BOBase):
             objs = self.FAILED_PERF
 
         elapsed_time = time.time() - start_time
-        iter_time = time.time() - start_time
+
+        self.iter_begin_time = time.time()
 
         if self.surrogate_type == 'context_prf' and config == self.history_container.config_space.get_default_configuration():
             self.reset_context(np.array(im))
@@ -486,7 +513,8 @@ class PipleLine(BOBase):
         self.history_container.update_observation(observation)
 
         if self.optimizer_type in ['GA', 'TurBO', 'DDPG'] and not self.auto_optimizer:
-            self.optimizer.update(observation)
+            if  not self.optimizer_type == 'DDPG' or not trial_state == FAILED:
+                self.optimizer.update(observation)
 
         if not trial_state == FAILED and self.auto_optimizer and not self.space_transfer:
             self.optimizer_list[2].update(observation)
