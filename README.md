@@ -15,7 +15,7 @@ It automatically chooses the proper algorithms for a specific tuning task to sep
 - **Performance boosted by transfer learning:** DBTune extracts knowledge from historical tuning tasks to speed up the current tuning. The more users utilize DBTune, the faster the tuning will be. 
 
 ### Overview of Supported Techniques 
-DBTune e supports the whole pipeline of configuration tuning, including knob selection, configuration tuning and knowledge transfer. 
+DBTune supports the whole pipeline of configuration tuning, including knob selection, configuration tuning and knowledge transfer. 
 Each module is equipped with multiple algorithm choices.
 For a given tuning task, DBTune automatically selects a proper solution path among the choices.
 
