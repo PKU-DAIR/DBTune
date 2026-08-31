@@ -1,0 +1,6 @@
+target,best_tps,default_ratio,raw,embed,ot114,oracle,embed_src,ot_src
+10-4-4-tpcc-nan,889.5,0.43,0.532,0.532,1.0,1.0,8c12g*_read_write_5-1.0,32c64g_10wh-tpcc
+100-4-4-tpcc-nan,364.1,0.673,0.723,0.723,0.723,1.0,4c6g*_read_write_5-0.6,32c64g_10wh-tpcc
+64-1000000-4-oltp_read_only-0.2,3867.1,0.928,0.882,0.865,0.915,0.97,32c64g*_read_only-1.0,32c64g*_read_only-0.2
+64-1000000-4-oltp_read_write_50-0.2,253.0,0.749,0.966,0.782,0.913,1.0,24c32g*_read_write_20-0.6,32c64g*_read_write_50-0.2
+64-1000000-4-oltp_write_only-0.2,953.8,0.578,1.0,0.548,0.673,1.0,24c32g*_read_write_5-1.0,32c64g*_write_only-0.6

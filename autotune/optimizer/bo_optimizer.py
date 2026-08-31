@@ -319,6 +319,14 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
         X, Y, cY = self.get_surrogate(history_container)
 
+        # REC_ARGMAX_MEAN: skip EI/BO acquisition and recommend the candidate with
+        # the best surrogate-predicted MEAN (pure exploitation). Makes the
+        # recommendation depend directly on the (source-trained) surrogate, so
+        # source selection actually drives the result. EI path investigated later.
+        import os as _os
+        if _os.environ.get('REC_ARGMAX_MEAN') == '1':
+            return self._recommend_argmax_mean(history_container)
+
         self.alter_model(history_container)
 
         if self.optimization_strategy == 'random':
@@ -326,6 +334,12 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
 
         if (not return_list) and self.rng.random() < self.rand_prob:
             self.logger.info('Sample random config. rand_prob=%f.' % self.rand_prob)
+            return self.sample_random_configs(num_configs=1, excluded_configs=history_container.configurations)[0]
+
+        if self.optimization_strategy == 'bo' and not history_container.get_incumbents():
+            # Every observation so far failed (e.g. an environment problem on the first
+            # attempts): there is no incumbent for EI, so keep sampling instead of crashing.
+            self.logger.warning('No successful observation yet; sampling a random config.')
             return self.sample_random_configs(num_configs=1, excluded_configs=history_container.configurations)[0]
 
         if self.optimization_strategy == 'bo':
@@ -387,6 +401,37 @@ class BO_Optimizer(object, metaclass=abc.ABCMeta):
             return self.sample_random_configs(num_configs=1, excluded_configs=history_container.configurations)[0]
         else:
             raise ValueError('Unknown optimization strategy: %s.' % self.optimization_strategy)
+
+    def _recommend_argmax_mean(self, history_container):
+        """Recommend the candidate with the best surrogate-predicted MEAN (pure
+        exploitation; no EI/uncertainty). The candidate pool is the matched
+        source's explored configs + random samples + the default, so the pick
+        reflects the selected source's best-predicted config. perf is minimized
+        (transformed -tps), so the best mean is the smallest.
+        """
+        import os
+        wm = self.surrogate_model
+        cands = []
+        mc = getattr(wm, 'matched_context_id', None)
+        src_dict = getattr(wm, 'source_dict', {}) or {}
+        if mc in src_dict and 'configurations' in src_dict[mc]:
+            cands.extend(src_dict[mc]['configurations'])      # source's explored configs
+        n_src = len(cands)
+        n_rand = int(os.environ.get('REC_N_RANDOM', '2000'))
+        if n_rand > 0:
+            rec_seed = int(os.environ.get('REC_RANDOM_SEED', '0'))
+            self.config_space.seed(rec_seed)
+            cands.extend(self.sample_random_configs(n_rand))
+        cands.append(self.config_space.get_default_configuration())
+
+        X = convert_configurations_to_array(cands)
+        mu, _ = wm.predict(X)
+        mu = np.asarray(mu).ravel()
+        best = int(np.argmin(mu))                              # minimization: smallest mean = best tps
+        self.logger.info('[REC_ARGMAX_MEAN] source=%s  best predicted perf=%.4f  '
+                         '(candidates: %d source + %d random + 1 default; winner idx=%d)'
+                         % (mc, float(mu[best]), n_src, n_rand, best))
+        return cands[best]
 
     def sample_random_configs(self, num_configs=1, excluded_configs=None):
         if excluded_configs is None:

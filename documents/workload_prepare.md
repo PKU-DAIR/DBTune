@@ -33,9 +33,9 @@ git clone https://github.com/oltpbenchmark/oltpbench.git
 
 - To run `oltpbenchmark` outside the folder, modify the following file:
 
-  - ./src/com/oltpbenchmark/DBWorkload.java (Line 85)
+  - ./src/com/oltpbenchmark/DBWorkload.java (Line 87)
 
-    ```shell
+    ```java
 
     pluginConfig = new XMLConfiguration("PATH_TO_OLTPBENCH/config/plugin.xml"); # modify this
 
@@ -43,7 +43,7 @@ git clone https://github.com/oltpbenchmark/oltpbench.git
 
   - ./oltpbenchmark
 
-    ```
+    ```bash
 
     #!/bin/bash
 
@@ -83,6 +83,18 @@ git clone https://github.com/oltpbenchmark/oltpbench.git
   ant build
   ```
 
+- Prepare
+Edit config file in oltpbench/config directory.
+```xml
+<DBUrl>jdbc:mysql://localhost:3306/ycsb</DBUrl>
+<username>root</username>
+<password></password>
+```
+
+Create database and load tables.
+```bash
+./oltpbenchmark -b ${WORKLOAD} -c ./config/${CONFIG_NAME}.xml --create=true --load=true
+```
 
 
 ## Join-Order-Benchmark (JOB)

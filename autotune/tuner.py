@@ -1,5 +1,6 @@
 import os
 import sys
+import pickle
 from collections import  defaultdict
 from autotune.utils.config_space import ConfigurationSpace, UniformIntegerHyperparameter, CategoricalHyperparameter, UniformFloatHyperparameter
 from autotune.workload_map import WorkloadMapping
@@ -65,19 +66,58 @@ class DBTuner:
         return config_space
 
     def load_history(self, knob_num):
-        files = os.listdir(self.hc_path)
-        config_space = self.setup_configuration_space(self.args_db['knob_config_file'], int(self.args_db['knob_num']))
-        for f in files:
-            try:
-                task_id = f.split('.')[0]
-                fn = os.path.join(self.hc_path, f)
-                history_container = HistoryContainer(task_id, config_space=config_space)
-                history_container.load_history_from_json(fn)
-                self.hcL.append(history_container)
-            except:
-                logger.info('load history failed for {}'.format(f))
+        files = [f for f in os.listdir(self.hc_path) if f.endswith('.json')]
+        cache_path = os.path.join(self.hc_path, '_history_cache.pkl')
+
+        # Use cache if it exists and is newer than all JSON files
+        loaded = False
+        if os.path.exists(cache_path):
+            cache_mtime = os.path.getmtime(cache_path)
+            # default=0 so an empty source pool (no JSONs, e.g. the no-source-context
+            # space-construction ablation) still uses its cached empty list.
+            newest_json = max((os.path.getmtime(os.path.join(self.hc_path, f)) for f in files), default=0)
+            if cache_mtime >= newest_json:
+                logger.info('Loading history from cache: {}'.format(cache_path))
+                with open(cache_path, 'rb') as fp:
+                    self.hcL = pickle.load(fp)
+                logger.info('Loaded {} history containers from cache'.format(len(self.hcL)))
+                loaded = True
+
+        if not loaded:
+            logger.info('Cache missing or stale, loading {} JSON files...'.format(len(files)))
+            config_space = self.setup_configuration_space(self.args_db['knob_config_file'], int(self.args_db['knob_num']))
+            for f in files:
+                try:
+                    task_id = os.path.splitext(f)[0]  # strip only .json; keep -0.2/-0.6/-1.0
+                    fn = os.path.join(self.hc_path, f)
+                    history_container = HistoryContainer(task_id, config_space=config_space)
+                    history_container.load_history_from_json(fn)
+                    self.hcL.append(history_container)
+                except:
+                    logger.info('load history failed for {}'.format(f))
+
+            logger.info('Saving history cache to {}'.format(cache_path))
+            with open(cache_path, 'wb') as fp:
+                pickle.dump(self.hcL, fp)
+            logger.info('Saved {} history containers to cache'.format(len(self.hcL)))
+
+        # Leave-one-out: drop source contexts whose task_id contains any
+        # exclude_contexts pattern (e.g. "64-1000000-4-oltp_read_only-0.2").
+        # Applied in-memory so the cache stays the full pool (reusable across targets).
+        excl = self.args_tune.get('exclude_contexts', '') if hasattr(self.args_tune, 'get') else ''
+        excl = (excl or '').strip()
+        if excl:
+            patterns = [p.strip() for p in excl.replace(',', ' ').split() if p.strip()]
+            before = len(self.hcL)
+            self.hcL = [h for h in self.hcL if not any(p in h.task_id for p in patterns)]
+            logger.info('exclude_contexts {}: dropped {} ({} -> {})'.format(
+                patterns, before - len(self.hcL), before, len(self.hcL)))
 
     def setup_transfer(self):
+        if self.method in ('LlamaTune', 'Sampler') and self.transfer_framework != 'none':
+            # transfer_framework=auto can resolve to rgpe and mangle surrogate_type
+            raise ValueError('%s requires transfer_framework = none (got %s)'
+                             % (self.method, self.transfer_framework))
         if self.transfer_framework == 'none':
             if self.method == 'SMAC':
                 self.surrogate_type = 'prf'
@@ -85,6 +125,11 @@ class DBTuner:
                 self.surrogate_type = 'gp'
             elif self.method == 'auto':
                 self.surrogate_type = 'auto'
+            elif self.method == 'LlamaTune':
+                # surrogate for the low-dim inner BO: prf (SMAC-style, paper default) or gp
+                self.surrogate_type = self.args_tune.get('llamatune_surrogate') or 'prf'
+            elif self.method == 'Sampler':
+                self.surrogate_type = None  # plays back a precomputed schedule, no model
         elif self.transfer_framework in ['workload_map', 'rgpe']:
             self.load_history(int(self.args_db['knob_num']))
             if self.method == 'SMAC':
@@ -97,7 +142,19 @@ class DBTuner:
             if self.transfer_framework == 'rgpe':
                 self.surrogate_type = 'tlbo_rgpe_' + method
             else:
-                self.surrogate_type = 'tlbo_mapping_' + method
+                mapping_method = self.args_tune.get('mapping_method', 'ottertune')
+                if mapping_method == 'ottertune':
+                    prune = self.args_tune.get('mapping_prune_metrics', 'false').lower() == 'true'
+                    prune_str = '_pruned' if prune else ''
+                    self.surrogate_type = f'tlbo_ottertune{prune_str}_{method}'
+                elif mapping_method == 'dml':
+                    # DML embedding source-selection + OtterTune downstream
+                    self.surrogate_type = f'tlbo_dmlmap_{method}'
+                elif mapping_method == 'rf':
+                    # RandomForest source-selection + OtterTune downstream
+                    self.surrogate_type = f'tlbo_rfmap_{method}'
+                else:
+                    self.surrogate_type = 'tlbo_mapping_' + method
 
         elif self.transfer_framework == 'finetune':
             if self.method != 'DDPG':
@@ -109,6 +166,9 @@ class DBTuner:
             self.surrogate_type = 'context_prf'
             if self.method != 'SMAC':
                 raise ValueError('We currently only support SMAC. Invalid method for context!')
+
+        elif self.transfer_framework == 'dml':
+            self.surrogate_type = None  # DML doesn't use surrogates
 
         else:
             raise ValueError('Invalid string %s for transfer framework!' % self.transfer_framework)
@@ -127,7 +187,9 @@ class DBTuner:
         files = os.listdir(self.hc_path)
         config_space = self.setup_configuration_space(self.args_db['knob_config_file'], int(self.args_db['knob_num']))
         for f in files:
-                task_id = f.split('.')[0]
+                if not f.endswith('.json'):
+                    continue
+                task_id = os.path.splitext(f)[0]  # strip only .json; keep -0.2/-0.6/-1.0
                 for workload in workloadL:
                     if workload in task_id:
                         break
@@ -148,6 +210,7 @@ class DBTuner:
                        num_objs=len(self.objs),
                        num_constraints=len(self.constraints),
                        optimizer_type=self.method,
+                       random_state=int(os.environ.get('DBTUNE_SEED') or self.args_tune.get('rand_seed', '42')),
                        max_runs=int(self.args_tune['max_runs']),
                        surrogate_type=self.surrogate_type,
                        history_bo_data=self.hcL,
@@ -173,9 +236,27 @@ class DBTuner:
                        hold_out_workload=self.args_db['workload'],
                        history_workload_data=self.history_workload_data,
                        only_knob=eval(self.args_tune['only_knob']),
-                       only_range=eval(self.args_tune['only_range']))
+                       only_range=eval(self.args_tune['only_range']),
+                       dml_model_path=self.args_tune.get('dml_model_path', 'autotune/optimizer/dml_models/context_model.pth'),
+                       dml_context_metrics_path=self.args_tune.get('dml_context_metrics_path', 'autotune/optimizer/dml_models/context_default_metrics_all.csv'),
+                       dml_result_data_dir=self.args_tune.get('dml_result_data_dir', 'DBMSTransferLearning/dataset'),
+                       rf_model_path=self.args_tune.get('rf_model_path', ''),
+                       rf_context_metrics_path=self.args_tune.get('rf_context_metrics_path', ''),
+                       rf_meta_path=self.args_tune.get('rf_meta_path', ''),
+                       prometheus_url=self.args_tune.get('prometheus_url', None),
+                       mysql_instance=self.args_tune.get('mysql_instance', None),
+                       node_instance=self.args_tune.get('node_instance', None),
+                       llamatune_low_dim=int(self.args_tune.get('llamatune_low_dim') or 16),
+                       llamatune_max_num_values=int(self.args_tune.get('llamatune_max_num_values') or 10000),
+                       sampler_method=self.args_tune.get('sampler_method') or 'sweep',
+                       sweep_levels=int(self.args_tune.get('sweep_levels') or 5),
+                       replay_file=self.args_tune.get('replay_file') or None,
+                       min_success=int(self.args_tune.get('min_success') or 0),
+                       space_transfer_replay=self.args_tune.get('space_transfer_replay') or 'True')
         history = bo.run()
         if history.num_objs == 1:
+            import matplotlib
+            matplotlib.use('Agg')
             import matplotlib.pyplot as plt
             history.plot_convergence()
             plt.savefig('%s.png' % history.task_id)

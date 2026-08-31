@@ -94,6 +94,25 @@ class PipleLine(BOBase):
         self.num_constraints = num_constraints
         self.FAILED_PERF = [MAXINT] * self.num_objs
 
+        # For the 'dmlmap' surrogate (DML embedding selection + OT downstream),
+        # bridge the DML model / Prometheus params to WorkloadMapping via env
+        # (it is built deep inside build_surrogate without config access).
+        if surrogate_type and 'dmlmap' in str(surrogate_type):
+            import os as _os
+            _os.environ['DMLMAP_MODEL_PATH'] = str(kwargs.get('dml_model_path', ''))
+            _os.environ['DMLMAP_CONTEXT_METRICS_PATH'] = str(kwargs.get('dml_context_metrics_path', ''))
+            _os.environ['DMLMAP_PROMETHEUS_URL'] = str(kwargs.get('prometheus_url') or '')
+            _os.environ['DMLMAP_MYSQL_INSTANCE'] = str(kwargs.get('mysql_instance') or '')
+            _os.environ['DMLMAP_NODE_INSTANCE'] = str(kwargs.get('node_instance') or '')
+
+        # Same trick for RF: WorkloadMapping(mapping_method='rf') loads the trained
+        # model + source vectors at __init__ from these env vars.
+        if surrogate_type and 'rfmap' in str(surrogate_type):
+            import os as _os
+            _os.environ['RFMAP_MODEL_PATH'] = str(kwargs.get('rf_model_path', ''))
+            _os.environ['RFMAP_CONTEXT_METRICS_PATH'] = str(kwargs.get('rf_context_metrics_path', ''))
+            _os.environ['RFMAP_META_PATH'] = str(kwargs.get('rf_meta_path', ''))
+
         self.selector_type = selector_type
         self.optimizer_type = optimizer_type
         self.config_space_all = config_space
@@ -142,9 +161,15 @@ class PipleLine(BOBase):
                 with open("tools/{}_best_optimizer.pkl".format(hold_out_workload), 'rb') as f:
                     self.best_method_id_list = pickle.load(f)
 
-        self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/data2/ruike/DBTune/scripts/experiment/gen_knobs/postgres_all.json')))
+        # TODO: knob file needs to be given to Pipeline class
+        # self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/data2/ruike/DBTune/scripts/experiment/gen_knobs/postgres_all.json')))
         self.iter_begin_time = time.time()
         advisor_kwargs = advisor_kwargs or {}
+        # optional stop-at-N-successes for sample collection (0 = disabled)
+        self.min_success = int(kwargs.get('min_success') or 0)
+        # space_transfer ablation switch: False disables the source-best-config
+        # replay init while keeping compact-space construction active
+        self.space_transfer_replay = str(kwargs.get('space_transfer_replay', 'True')).lower() != 'false'
         # init history container
         if self.num_objs == 1:
             self.history_container = HistoryContainer(task_id=self.task_id,
@@ -211,6 +236,70 @@ class PipleLine(BOBase):
                                                 batch_size=kwargs['batch_size'],
                                                 mean_var_file=kwargs['mean_var_file']
                                                 )
+            elif optimizer_type == 'LlamaTune':
+                assert self.num_objs == 1 and num_constraints == 0
+                assert self.incremental == 'none', 'LlamaTune requires incremental=none'
+                assert self.num_hps_init == self.num_hps_max, \
+                    'LlamaTune requires initial_tunable_knob_num=-1 (knob selection must be a no-op)'
+                assert not space_transfer and not auto_optimizer, \
+                    'LlamaTune does not support space_transfer/auto_optimizer'
+                from autotune.optimizer.llamatune_optimizer import LlamaTune_Optimizer
+                self.optimizer = LlamaTune_Optimizer(
+                    config_space,
+                    task_id=task_id,
+                    surrogate_type=surrogate_type if surrogate_type not in (None, 'auto') else 'prf',
+                    acq_type='ei',
+                    acq_optimizer_type='auto',
+                    init_strategy=init_strategy,
+                    initial_trials=initial_runs,
+                    random_state=random_state,
+                    low_dim=int(kwargs.get('llamatune_low_dim') or 16),
+                    max_num_values=int(kwargs.get('llamatune_max_num_values') or 10000),
+                )
+                # resume: refill the inner low-dim BO from the loaded outer history
+                # (update() approx-projects configs it did not itself suggest);
+                # without this a resumed run restarts the inner initial design
+                for _config, _perf in zip(self.history_container.configurations,
+                                          self.history_container.perfs):
+                    self.optimizer.update(Observation(
+                        config=_config, objs=[_perf], constraints=None,
+                        trial_state=SUCCESS, elapsed_time=0.0, iter_time=0.0,
+                        EM=None, resource=None, IM=None, info=None, context=None))
+                if self.history_container.configurations:
+                    self.logger.info('LlamaTune: replayed %d loaded observations into '
+                                     'the inner BO' % len(self.history_container.configurations))
+            elif optimizer_type == 'Sampler':
+                assert self.num_objs == 1 and num_constraints == 0
+                assert self.incremental == 'none', 'Sampler requires incremental=none'
+                assert self.num_hps_init == self.num_hps_max, \
+                    'Sampler requires initial_tunable_knob_num=-1 (knob selection must be a no-op)'
+                assert not space_transfer and not auto_optimizer, \
+                    'Sampler does not support space_transfer/auto_optimizer'
+                from autotune.optimizer.sampler_optimizer import Sampler_Optimizer
+                self.optimizer = Sampler_Optimizer(
+                    config_space,
+                    strategy=kwargs.get('sampler_method') or 'sweep',
+                    sweep_levels=int(kwargs.get('sweep_levels') or 5),
+                    size=self.max_iterations,
+                    random_state=random_state,
+                    task_id=task_id,
+                    replay_file=kwargs.get('replay_file') or None,
+                )
+            elif optimizer_type == 'DML':
+                assert self.num_objs == 1 and num_constraints == 0
+                assert self.incremental == 'none'
+                from autotune.optimizer.dml_optimizer import DML_Optimizer
+                self.optimizer = DML_Optimizer(
+                    config_space,
+                    self.history_container,
+                    model_path=kwargs.get('dml_model_path', 'autotune/optimizer/dml_models/context_model.pth'),
+                    context_metrics_path=kwargs.get('dml_context_metrics_path', 'autotune/optimizer/dml_models/context_default_metrics_all.csv'),
+                    result_data_dir=kwargs.get('dml_result_data_dir', 'DBMSTransferLearning/dataset'),
+                    knob_config_file=knob_config_file,
+                    prometheus_url=kwargs.get('prometheus_url'),
+                    mysql_instance=kwargs.get('mysql_instance'),
+                    node_instance=kwargs.get('node_instance'),
+                )
             else:
                 raise ValueError('Invalid advisor type!')
         else:
@@ -269,7 +358,13 @@ class PipleLine(BOBase):
             if len(history_container.incumbents):
                 candidate_configs.append(history_container.incumbents[0][0])
 
-        return  max_min_distance(default_config=default_config, src_configs=candidate_configs, num=self.init_num)
+        # No source contexts (space-construction-without-source ablation): there are
+        # no source incumbents to seed the initial design, so start from the default
+        # only. max_min_distance would otherwise call np.argmax on an empty array.
+        if not candidate_configs:
+            return [default_config]
+
+        return  max_min_distance(default_config=default_config, src_configs=candidate_configs, num=min(self.init_num, len(candidate_configs)))
 
     def get_history(self):
         return self.history_container
@@ -284,6 +379,14 @@ class PipleLine(BOBase):
             if self.budget_left < 0:
                 self.logger.info('Time %f elapsed!' % self.runtime_limit)
                 break
+            # optional success-count stop (sample collection): the yield target is
+            # usable (SUCCESS) samples, not attempts — failure rate is unpredictable
+            if self.min_success:
+                n_ok = sum(1 for t in self.history_container.trial_states if t == SUCCESS)
+                if n_ok >= self.min_success:
+                    self.logger.info('min_success reached: %d SUCCESS >= %d, stopping'
+                                     % (n_ok, self.min_success))
+                    break
             time_b = time.time()
             start_time = time.time()
             # get another compact space
@@ -451,11 +554,24 @@ class PipleLine(BOBase):
     def iterate(self, compact_space=None):
         self.knob_selection()
         #get configuration suggestion
-        if self.space_transfer and len(self.history_container.configurations) < self.init_num:
+        if self.space_transfer and self.space_transfer_replay \
+                and len(self.history_container.configurations) < self.init_num:
             #space transfer: use best source config to init
+            # (undocumented warm start from OpAdviser's released code, commit 8ca5a99;
+            #  space_transfer_replay=False keeps only the paper's space construction)
             config = self.initial_configurations[len(self.history_container.configurations)]
         else:
             config = self.optimizer.get_suggestion(history_container=self.history_container, compact_space=compact_space)
+
+        # Capture matched context from optimizer or surrogate (DML, workload_map, etc.)
+        matched = None
+        if hasattr(self.optimizer, 'matched_context_id') and self.optimizer.matched_context_id:
+            matched = self.optimizer.matched_context_id
+        elif hasattr(self.optimizer, 'surrogate_model') and hasattr(self.optimizer.surrogate_model, 'matched_context_id'):
+            matched = self.optimizer.surrogate_model.matched_context_id
+        if matched:
+            self.current_context = {'matched_context': matched}
+
         if self.space_transfer:
             if len(self.history_container.get_incumbents()):
                 config = impute_incumb_values(config, self.history_container.get_incumbents()[0][0])
@@ -512,7 +628,7 @@ class PipleLine(BOBase):
         )
         self.history_container.update_observation(observation)
 
-        if self.optimizer_type in ['GA', 'TurBO', 'DDPG'] and not self.auto_optimizer:
+        if self.optimizer_type in ['GA', 'TurBO', 'DDPG', 'LlamaTune'] and not self.auto_optimizer:
             if  not self.optimizer_type == 'DDPG' or not trial_state == FAILED:
                 self.optimizer.update(observation)
 
@@ -532,6 +648,12 @@ class PipleLine(BOBase):
 
 
     def get_compact_space(self):
+        # No source contexts (space-construction-without-source ablation): RGPE has
+        # no source tasks to weight (K=0 -> 1/K division by zero), and there is
+        # nothing to prune from, so keep the full configuration space.
+        if not self.history_bo_data:
+            self.logger.info("No source contexts; keeping full space (no space construction).")
+            return self.config_space
         if not hasattr(self, 'rgpe'):
             rng = check_random_state(100)
             seed = rng.randint(MAXINT)

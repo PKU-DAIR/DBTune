@@ -1,0 +1,26 @@
+{
+  "read": {
+    "picked_source": "24c32g_64-1000000-4-oltp_read_only-1.0",
+    "top1_overlap": 0.2143,
+    "intersect": 3,
+    "target_top1_size": 9,
+    "src_top1_size": 8,
+    "n_candidates": 160
+  },
+  "rw50": {
+    "picked_source": "24c32g_100-4-4-tpcc-nan",
+    "top1_overlap": 0.8889,
+    "intersect": 8,
+    "target_top1_size": 9,
+    "src_top1_size": 8,
+    "n_candidates": 160
+  },
+  "write": {
+    "picked_source": "12c16g_64-1000000-4-oltp_read_write_5-1.0",
+    "top1_overlap": 0.5,
+    "intersect": 5,
+    "target_top1_size": 9,
+    "src_top1_size": 6,
+    "n_candidates": 160
+  }
+}

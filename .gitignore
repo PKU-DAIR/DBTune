@@ -1,3 +1,4 @@
+*.tar.gz
 *.pyc
 *.log
 *.idea
@@ -7,6 +8,13 @@
 *.out
 train_user_*.py
 *.res
-*.png
 scripts/log/
 .vscode/
+prepare_runs/
+venv/
+third_party/
+mysql_build/
+*.egg-info/
+__pycache__/
+build/
+results/

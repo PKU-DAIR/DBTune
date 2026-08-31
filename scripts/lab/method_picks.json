@@ -1,0 +1,12 @@
+{
+  "ot": {
+    "read": "32c64g_64-100000-4-oltp_read_only-0.2",
+    "rw50": "32c64g_64-100000-4-oltp_read_write_50-0.2",
+    "write": "32c64g_64-100000-4-oltp_write_only-0.6"
+  },
+  "rf": {
+    "read": "32c64g_64-100000-4-oltp_read_only-1.0",
+    "rw50": "16c24g_64-100000-4-oltp_write_only-0.6",
+    "write": "32c64g_64-1000000-4-oltp_read_write_5-1.0"
+  }
+}

@@ -8,6 +8,8 @@ from autotune.utils.util_funcs import get_types
 
 def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data=None, context=None):
     assert config_space is not None
+    if func_str is None:
+        func_str = 'gp'
     func_str = func_str.lower()
     types, bounds = get_types(config_space)
     seed = rng.randint(MAXINT)
@@ -67,11 +69,33 @@ def build_surrogate(func_str='gp', config_space=None, rng=None, history_hpo_data
             inner_surrogate_type = func_str.split('_')[-1]
             return TOPO_V3(config_space, history_hpo_data, seed,
                            surrogate_type=inner_surrogate_type, num_src_hpo_trial=-1)
+        elif 'ottertune' in func_str:
+            from autotune.transfer.tlbo.workload_map import WorkloadMapping
+            inner_surrogate_type = func_str.split('_')[-1]
+            prune_metrics = 'pruned' in func_str
+            return WorkloadMapping(config_space, history_hpo_data, seed,
+                                   surrogate_type=inner_surrogate_type, num_src_hpo_trial=-1,
+                                   mapping_method='ottertune', prune_metrics=prune_metrics)
+        elif 'dmlmap' in func_str:
+            # DML embedding source-selection + OtterTune downstream (surrogate+BO/EI)
+            from autotune.transfer.tlbo.workload_map import WorkloadMapping
+            inner_surrogate_type = func_str.split('_')[-1]
+            return WorkloadMapping(config_space, history_hpo_data, seed,
+                                   surrogate_type=inner_surrogate_type, num_src_hpo_trial=-1,
+                                   mapping_method='dml')
+        elif 'rfmap' in func_str:
+            # RandomForest source-selection + OtterTune downstream (surrogate+BO/EI)
+            from autotune.transfer.tlbo.workload_map import WorkloadMapping
+            inner_surrogate_type = func_str.split('_')[-1]
+            return WorkloadMapping(config_space, history_hpo_data, seed,
+                                   surrogate_type=inner_surrogate_type, num_src_hpo_trial=-1,
+                                   mapping_method='rf')
         elif 'mapping' in func_str:
             from autotune.transfer.tlbo.workload_map import WorkloadMapping
             inner_surrogate_type = func_str.split('_')[-1]
             return WorkloadMapping(config_space, history_hpo_data, seed,
-                                   surrogate_type=inner_surrogate_type, num_src_hpo_trial=-1)
+                                   surrogate_type=inner_surrogate_type, num_src_hpo_trial=-1,
+                                   mapping_method='dbtune')
         else:
             raise ValueError('Invalid string %s for tlbo surrogate!' % func_str)
     else:

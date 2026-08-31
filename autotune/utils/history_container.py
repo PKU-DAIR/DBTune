@@ -289,7 +289,9 @@ class HistoryContainer(object):
                 'context': self.contexts[i],
                 'trial_state': self.trial_states[i],
                 'elapsed_time': self.elapsed_times[i],
-                'iter_time': self.iter_times[i]
+                'iter_time': self.iter_times[i],
+                # wall-clock seconds since the tuning session started (container init)
+                'update_time': self.update_times[i] if i < len(self.update_times) else None
             }
             data.append(tmp)
 
@@ -350,6 +352,7 @@ class HistoryContainer(object):
             self.trial_states.append(trial_state)
             self.elapsed_times.append(elapsed_time)
             self.iter_times.append(iter_time)
+            self.update_times.append(tmp.get('update_time') or 0)
             self.internal_metrics.append(im)
             self.external_metrics.append(em)
             self.resource.append(resource)

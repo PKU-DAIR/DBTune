@@ -1,0 +1,26 @@
+{
+  "read": {
+    "picked_source": "32c64g_64-100000-4-oltp_read_only-1.0",
+    "predicted_overlap": 0.6334,
+    "n_candidates": 286,
+    "n_excluded": 7,
+    "n_pairs_trained": 81510,
+    "usable_metric_cols": 93
+  },
+  "rw50": {
+    "picked_source": "16c24g_64-100000-4-oltp_write_only-0.6",
+    "predicted_overlap": 0.481,
+    "n_candidates": 286,
+    "n_excluded": 7,
+    "n_pairs_trained": 81510,
+    "usable_metric_cols": 93
+  },
+  "write": {
+    "picked_source": "32c64g_64-1000000-4-oltp_read_write_5-1.0",
+    "predicted_overlap": 0.4289,
+    "n_candidates": 286,
+    "n_excluded": 7,
+    "n_pairs_trained": 81510,
+    "usable_metric_cols": 93
+  }
+}

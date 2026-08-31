@@ -1,0 +1,3 @@
+[client]
+user = root
+socket = /work/xg26g002/x10563/DBTune/mysql_build/mysql.sock

@@ -12,7 +12,6 @@ from ConfigSpace.configuration_space import OrderedDict
 from autotune.knobs import logger
 
 TIMEOUT = 4
-num_samples_normal = 0
 
 class ConfigParser(object):
 
@@ -83,35 +82,34 @@ def parse_tpcc(file_path):
 def parse_sysbench(file_path):
     with open(file_path) as f:
         lines = f.read()
-    temporal_pattern = re.compile(
-                "tps: (\d+.\d+) qps: (\d+.\d+) \(r/w/o: (\d+.\d+)/(\d+.\d+)/(\d+.\d+)\)"
-                " lat \(ms,95%\): (\d+.\d+) err/s: (\d+.\d+) reconn/s: (\d+.\d+)")
-    temporal = temporal_pattern.findall(lines)
-    tps, latency, qps = 0, 0, 0
-    tpsL, latL ,qpsL = [], [], []
-    for i in temporal:
-        tps += float(i[0])
-        latency += float(i[5])
-        qps += float(i[1])
-        tpsL.append(float(i[0]))
-        latL.append(float(i[5]))
-        qpsL.append(float(i[1]))
-    num_samples = len(temporal)
-    global num_samples_normal
-    if num_samples_normal == 0:
-        num_samples_normal = num_samples
-    if num_samples >= num_samples_normal * 0.8:
-        tps /= num_samples
-        qps /= num_samples
-        latency /= num_samples
-        tps_var = statistics.variance(tpsL)
-        lat_var = statistics.variance(latL)
-        qps_var = statistics.variance(qpsL)
-        return [tps, latency, qps, tps_var, lat_var, qps_var]
 
+    # Parse from summary (warmup-excluded, always present)
+    tps_match = re.search(r"transactions:\s+\d+\s+\((\d+\.\d+) per sec\.\)", lines)
+    qps_match = re.search(r"queries:\s+\d+\s+\((\d+\.\d+) per sec\.\)", lines)
+    lat_match = re.search(r"95th percentile:\s+(\d+\.\d+)", lines)
+
+    if tps_match and qps_match and lat_match:
+        tps = float(tps_match.group(1))
+        qps = float(qps_match.group(1))
+        latency = float(lat_match.group(1))
     else:
-        print('num_samples is zero!')
-        return[-1, -1, -1, -1, -1, -1]
+        print(f'Failed to parse sysbench summary from {file_path}')
+        return [-1, -1, -1, -1, -1, -1]
+
+    # Compute variance from report-interval lines (if available)
+    temporal_pattern = re.compile(
+                r"tps: (\d+\.\d+) qps: (\d+\.\d+) \(r/w/o: (\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+)\)"
+                r" lat \(ms,95%\): (\d+\.\d+)")
+    temporal = temporal_pattern.findall(lines)
+    tpsL = [float(i[0]) for i in temporal]
+    latL = [float(i[5]) for i in temporal]
+    qpsL = [float(i[1]) for i in temporal]
+
+    tps_var = statistics.variance(tpsL) if len(tpsL) > 1 else 0
+    lat_var = statistics.variance(latL) if len(latL) > 1 else 0
+    qps_var = statistics.variance(qpsL) if len(qpsL) > 1 else 0
+
+    return [tps, latency, qps, tps_var, lat_var, qps_var]
 
 
 def parse_job(file_path, select_file, timeout=4):
@@ -166,6 +164,23 @@ def parse_oltpbench(file_path):
 
     return [tps, latency, tps, -1, -1, -1]
 
+
+def parse_oltpbench_res(file_path):
+    """Parse OLTPBench .res file (per-second throughput samples) as fallback when .summary is missing."""
+    import csv
+    tps_list = []
+    lat_list = []
+    with open(file_path) as f:
+        reader = csv.reader(f)
+        header = next(reader)  # skip header
+        for row in reader:
+            if len(row) >= 2:
+                tps_list.append(float(row[1]))
+            if len(row) >= 3:
+                lat_list.append(float(row[2]))
+    tps = sum(tps_list) / len(tps_list) if tps_list else 0.0
+    latency = np.percentile(lat_list, 95) if lat_list else -1
+    return [tps, latency, tps, -1, -1, -1]
 
 
 '''

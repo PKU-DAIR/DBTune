@@ -21,7 +21,9 @@ ${SYSBENCH_BIN} ${run_script} \
         --mysql-storage-engine=innodb \
         --range-size=100 \
         --events=0 \
-        --rand-type=uniform \
+        --rand-type=${SYSBENCH_RAND_TYPE:-zipfian} \
+        --rand-zipfian-exp=${SYSBENCH_ZIPFIAN_EXP:-0.2} \
+        ${SYSBENCH_EXTRA_ARGS:-} \
         --tables=$6 \
         --table-size=$7 \
         --db-ps-mode=disable \

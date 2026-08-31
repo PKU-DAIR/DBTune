@@ -7,7 +7,7 @@ from multiprocessing import Manager
 from multiprocessing.connection import Client
 import sys
 from .knobs import logger
-from .utils.parser import parse_sysbench, parse_oltpbench, parse_job
+from .utils.parser import parse_sysbench, parse_oltpbench, parse_oltpbench_res, parse_job
 from .knobs import initialize_knobs, get_default_knobs
 import psutil
 import multiprocessing as mp
@@ -48,6 +48,12 @@ class DBEnv:
             self.constraints = eval(args_tune['constraints'])
         self.lhs_log = args['lhs_log']
         self.cpu_core = args['cpu_core']
+
+        # Internal metrics source: 'innodb' (65 INNODB_METRICS) or 'prometheus' (114 CSV-compatible)
+        self.internal_metrics_source = args_tune.get('internal_metrics_source', 'prometheus')
+        self.prometheus_url = args_tune.get('prometheus_url', None)
+        self.mysql_instance = args_tune.get('mysql_instance', None)
+        self.node_instance = args_tune.get('node_instance', None)
         self.info =  {
             'objs': self.y_variable,
             'constraints': self.constraints
@@ -135,13 +141,18 @@ class DBEnv:
                 print("benchmark result file does not exist!")
             result = parse_sysbench(filename)
         elif self.workload['name'] == 'oltpbench':
+            summary_path = 'results/{}.summary'.format(filename)
+            res_path = 'results/{}.res'.format(filename)
             for _ in range(60):
-                if os.path.exists('results/{}.summary'.format(filename)):
+                if os.path.exists(summary_path) or os.path.exists(res_path):
                     break
                 time.sleep(1)
-            if not os.path.exists('results/{}.summary'.format(filename)):
+            if os.path.exists(summary_path):
+                result = parse_oltpbench(summary_path)
+            elif os.path.exists(res_path):
+                result = parse_oltpbench_res(res_path)
+            else:
                 print("benchmark result file does not exist!")
-            result = parse_oltpbench('results/{}.summary'.format(filename))
         elif self.workload['name'] == 'job' or self.workload['name'] == 'tpch':
             for _ in range(60):
                 if os.path.exists(filename):
@@ -170,13 +181,24 @@ class DBEnv:
                                               self.db.host,
                                               self.db.port,
                                               self.db.user,
-                                              150,
-                                              800000,
+                                              int(self.args.get('sysbench_tables', 64)),
+                                              int(self.args.get('sysbench_table_size', 100000)),
                                               BENCHMARK_WARMING_TIME,
                                               self.threads,
                                               BENCHMARK_RUNNING_TIME,
                                               filename,
                                               self.db.dbname)
+            # per-ini workload knobs: pbsdsh strips exported env vars, so these
+            # settings must travel in the config file, not the job environment
+            zipfian_exp = str(self.args.get('sysbench_zipfian_exp', '')).strip()
+            if zipfian_exp:
+                cmd = 'SYSBENCH_ZIPFIAN_EXP=%s %s' % (zipfian_exp, cmd)
+            rand_type = str(self.args.get('sysbench_rand_type', '')).strip()
+            if rand_type:
+                cmd = 'SYSBENCH_RAND_TYPE=%s %s' % (rand_type, cmd)
+            extra_args = str(self.args.get('sysbench_extra_args', '')).strip()
+            if extra_args:
+                cmd = "SYSBENCH_EXTRA_ARGS='%s' %s" % (extra_args, cmd)
         elif self.workload['name'] == 'oltpbench':
             filename = filename.split('/')[-1].split('.')[0]
             cmd = self.workload['cmd'].format(dirname + '/cli/run_oltpbench.sh',
@@ -203,7 +225,12 @@ class DBEnv:
 
     def get_states(self, collect_resource=0):
         # start Internal Metrics Collection
-        internal_metrics = Manager().list()
+        # one Manager per DBEnv: a fresh Manager() per iteration is never shut down, so its
+        # server process + /tmp listener socket leak until the process can no longer spawn
+        # one (collect_S0_llama_online: 'Process SyncManager-67 ... No space left on device')
+        if getattr(self, '_mp_manager', None) is None:
+            self._mp_manager = Manager()
+        internal_metrics = self._mp_manager.list()
         im = mp.Process(target=self.db.get_internal_metrics,
                         args=(internal_metrics, BENCHMARK_RUNNING_TIME, BENCHMARK_WARMING_TIME))
         self.db.set_im_alive(True)
@@ -300,6 +327,26 @@ class DBEnv:
             raise Exception('Apply knobs failed!')
 
 
+    def _knobs_are_default(self, knobs):
+        """True when every knob equals its knob-file default (ON/OFF~1/0, case-insensitive,
+        numeric tolerance) — i.e. this is the iteration-0 default configuration."""
+        def norm(v):
+            t = str(v).strip().lower()
+            return {'on': '1', 'off': '0'}.get(t, t)
+        for k, v in knobs.items():
+            d = self.knobs_detail.get(k, {}).get('default') if isinstance(self.knobs_detail.get(k), dict) else None
+            if d is None:
+                continue
+            if norm(v) == norm(d):
+                continue
+            try:
+                if abs(float(v) - float(d)) <= 1e-6 * max(1.0, abs(float(d))):
+                    continue
+            except (TypeError, ValueError):
+                pass
+            return False
+        return True
+
     def step_GP(self, knobs, collect_resource=True):
         #return False, np.random.rand(6), np.random.rand(65), np.random.rand(8)
         # re-init database if activated
@@ -310,7 +357,7 @@ class DBEnv:
                 logger.info('db reinitialized')
         self.step_count = self.step_count + 1
         self.reinit_interval = self.reinit_interval + 1
-
+        
         # modify and apply knobs
         for key in knobs.keys():
             value = knobs[key]
@@ -329,6 +376,13 @@ class DBEnv:
             flag = self.db.apply_knobs_online(knobs)
         else:
             flag = self.db.apply_knobs_offline(knobs)
+
+        # After the first iteration of a FRESH session (= the default config) verify it took
+        # effect. On a RESUMED session step 1 is an arbitrary suggested config: skip the check
+        # (it raised on every chunk restart of the collection runners and recorded a config
+        # that never ran as FAILED, feeding a corrupt label to the optimizer).
+        if self.step_count == 1 and self._knobs_are_default(knobs):
+            self.db.ensure_default_config()
 
         if not flag:
             if self.reinit:
@@ -409,22 +463,36 @@ class DBEnv:
                 'qpsVar': metrics[5],
             }
 
-            resource = {
-                'cpu': resource[0],
-                'readIO': resource[1],
-                'writeIO': resource[2],
-                'IO': resource[1] + resource[2],
-                'virtualMem': resource[3],
-                'physical': resource[4],
-                'dirty': resource[5],
-                'hit': resource[6],
-                'data': resource[7],
-            }
+            # Optionally override internal metrics with Prometheus collection
+            if self.internal_metrics_source == 'prometheus' and self.prometheus_url:
+                try:
+                    from autotune.database.prometheus_metrics import (
+                        collect_all_prometheus_metrics, build_resource_from_prometheus
+                    )
+                    prom_metrics = collect_all_prometheus_metrics(
+                        self.prometheus_url, self.mysql_instance, self.node_instance
+                    )
+                    internal_metrics = prom_metrics
+                    resource_dict = build_resource_from_prometheus(prom_metrics)
+                except Exception as e:
+                    logger.warning("Prometheus metrics collection failed: %s. Falling back to INNODB_METRICS.", e)
+                    resource_dict = {
+                        'cpu': resource[0], 'readIO': resource[1], 'writeIO': resource[2],
+                        'IO': resource[1] + resource[2], 'virtualMem': resource[3],
+                        'physical': resource[4], 'dirty': resource[5], 'hit': resource[6], 'data': resource[7],
+                    }
+            else:
+                resource_dict = {
+                    'cpu': resource[0], 'readIO': resource[1], 'writeIO': resource[2],
+                    'IO': resource[1] + resource[2], 'virtualMem': resource[3],
+                    'physical': resource[4], 'dirty': resource[5], 'hit': resource[6], 'data': resource[7],
+                }
 
-            res = dict(external_metrics, **resource)
+            res = dict(external_metrics, **resource_dict)
             objs = self.get_objs(res)
             constraints = self.get_constraints(res)
-            return objs, constraints, external_metrics, resource, list(internal_metrics), self.info, trial_state
+            return objs, constraints, external_metrics, resource_dict, list(internal_metrics), self.info, trial_state
 
-        except:
+        except Exception as e:
+            logger.error('step error: {}'.format(e))
             return None, None, {}, {}, [], self.info, FAILED

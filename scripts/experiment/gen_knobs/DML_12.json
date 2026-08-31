@@ -1,0 +1,105 @@
+{
+  "innodb_buffer_pool_size": {
+    "default": 1073741824,
+    "dynamic": "Yes",
+    "max": 25769803776,
+    "min": 1073741824,
+    "scope": "Global",
+    "type": "integer"
+  },
+  "innodb_read_io_threads": {
+    "default": 2,
+    "dynamic": "No",
+    "max": 23,
+    "min": 1,
+    "scope": "Global",
+    "type": "integer"
+  },
+  "innodb_write_io_threads": {
+    "default": 2,
+    "dynamic": "No",
+    "max": 23,
+    "min": 1,
+    "scope": "Global",
+    "type": "integer"
+  },
+  "innodb_flush_log_at_trx_commit": {
+    "default": 1,
+    "dynamic": "Yes",
+    "enum_values": [
+      "0",
+      "1",
+      "2"
+    ],
+    "scope": "Global",
+    "type": "enum"
+  },
+  "innodb_adaptive_hash_index": {
+    "default": 1,
+    "dynamic": "Yes",
+    "enum_values": [
+      "0",
+      "1"
+    ],
+    "scope": "Global",
+    "type": "enum"
+  },
+  "sync_binlog": {
+    "default": 1,
+    "dynamic": "Yes",
+    "enum_values": [
+      "0",
+      "1"
+    ],
+    "scope": "Global",
+    "type": "enum"
+  },
+  "innodb_lru_scan_depth": {
+    "default": 1024,
+    "dynamic": "Yes",
+    "max": 10000,
+    "min": 100,
+    "scope": "Global",
+    "type": "integer"
+  },
+  "innodb_buffer_pool_instances": {
+    "default": 1,
+    "dynamic": "No",
+    "max": 8,
+    "min": 1,
+    "scope": "Global",
+    "type": "integer"
+  },
+  "innodb_change_buffer_max_size": {
+    "default": 25,
+    "dynamic": "Yes",
+    "max": 50,
+    "min": 0,
+    "scope": "Global",
+    "type": "integer"
+  },
+  "innodb_io_capacity": {
+    "default": 100,
+    "dynamic": "Yes",
+    "max": 20000,
+    "min": 100,
+    "scope": "Global",
+    "type": "integer"
+  },
+  "innodb_log_file_size": {
+    "default": 50331648,
+    "dynamic": "No",
+    "max": 5368709120,
+    "min": 4194304,
+    "scope": "Global",
+    "type": "integer"
+  },
+  "table_open_cache": {
+    "default": 4000,
+    "dynamic": "Yes",
+    "max": 4000,
+    "min": 1,
+    "scope": "Global",
+    "type": "integer"
+  }
+}

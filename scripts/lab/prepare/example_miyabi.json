@@ -1,0 +1,35 @@
+{
+  "family": "sysbench",
+  "seed": 42,
+  "n_targets": 10,
+  "repeats": 3,
+  "budget": {"min_success": 100, "max_attempts": 300, "seed": 42},
+  "parameters": [
+    {"name": "rows",    "lo": 80000, "hi": 1600000, "scale": "log", "integer": true,
+     "belief": {"type": "triangular", "lo": 80000, "mode": 800000, "hi": 1600000}},
+    {"name": "threads", "lo": 16,    "hi": 256,     "scale": "log", "integer": true,
+     "belief": {"type": "triangular", "lo": 16, "mode": 128, "hi": 256}},
+    {"name": "zipf",    "lo": 0.0,   "hi": 1.0,
+     "belief": {"type": "triangular", "lo": 0.0, "mode": 0.7, "hi": 1.0}}
+  ],
+  "methods": [
+    {"type": "bisection", "theta": 0.9, "delta": 0.1, "max_probes": 3, "repeats": 3},
+    {"type": "random", "match": "bisection", "seed": 7},
+    {"type": "anchor"}
+  ],
+  "backend": {
+    "type": "miyabi",
+    "root": "/work/xg26g002/x10563/DBTune",
+    "project": "xg26g002",
+    "queue": "regular-c",
+    "max_nodes": 16,
+    "max_jobs": 2,
+    "poll_s": 120,
+    "tune_hours": 24,
+    "eval_minutes_per_config": 8,
+    "online": true,
+    "knob_file": "./experiment/gen_knobs/mysql_perf_8.0_online.json",
+    "dry_run": true
+  },
+  "out_dir": "prepare_runs/example_miyabi"
+}

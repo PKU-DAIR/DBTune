@@ -1,0 +1,36 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+
+    {
+      "name": "Python Debugger: optimize",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "optimize.py",
+      "console": "integratedTerminal",
+      "args": "--config=config_performance.ini",
+      "cwd": "${workspaceFolder}/scripts",
+      // venv path
+      "justMyCode": false,
+      "python": "${workspaceFolder}/venv/bin/python3"
+    },
+    {
+      "name": "OtterTune sysbench rw50 (crash repro)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "optimize.py",
+      "console": "integratedTerminal",
+      "args": "--config=config_sysbench_ot_rw50.ini",
+      "cwd": "${workspaceFolder}/scripts",
+      "justMyCode": false,
+      "python": "${workspaceFolder}/venv/bin/python3",
+      "env": {
+        "SYSBENCH_BIN": "/usr/local/bin/sysbench",
+        "MYSQL_SOCK": "../mysql_build/mysql.sock"
+      }
+    }
+  ]
+}
