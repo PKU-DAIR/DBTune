@@ -38,6 +38,8 @@ from autotune.utils.config_space import ConfigurationSpace, UniformIntegerHyperp
 from autotune.optimizer.ga_optimizer import GA_Optimizer
 from autotune.optimizer.bo_optimizer import BO_Optimizer
 from autotune.optimizer.ddpg_optimizer import DDPG_Optimizer
+from autotune.optimizer.edge_ddpg_optimizer import EdgeDDPG_Optimizer
+from autotune.optimizer.moe_edge_ddpg_optimizer import MoEEdgeDDPG_Optimizer
 import pdb
 from autotune.knobs import ts, logger
 
@@ -142,7 +144,7 @@ class PipleLine(BOBase):
                 with open("tools/{}_best_optimizer.pkl".format(hold_out_workload), 'rb') as f:
                     self.best_method_id_list = pickle.load(f)
 
-        self.logger.info("Total space size:{}".format(estimate_size(self.config_space, '/data2/ruike/DBTune/scripts/experiment/gen_knobs/postgres_all.json')))
+        self.logger.info("Total space size:{}".format(estimate_size(self.config_space, self.knob_config_file)))
         self.iter_begin_time = time.time()
         advisor_kwargs = advisor_kwargs or {}
         # init history container
@@ -211,6 +213,46 @@ class PipleLine(BOBase):
                                                 batch_size=kwargs['batch_size'],
                                                 mean_var_file=kwargs['mean_var_file']
                                                 )
+            elif optimizer_type == 'EdgeDDPG':
+                assert self.num_objs == 1 and num_constraints == 0
+                assert self.incremental == 'none'
+                logger.info('=== Using Edge-DDPG Optimizer for Fog Computing ===')
+                self.optimizer = EdgeDDPG_Optimizer(config_space,
+                                                self.history_container,
+                                                metrics_num=num_metrics,
+                                                task_id=task_id,
+                                                params=kwargs['params'],
+                                                batch_size=kwargs['batch_size'],
+                                                mean_var_file=kwargs['mean_var_file'],
+                                                use_fog_reward=kwargs.get('use_fog_reward', False),
+                                                fog_tier=kwargs.get('fog_tier', None),
+                                                baseline_tps=kwargs.get('baseline_tps', None),
+                                                steps_per_phase=int(kwargs.get('steps_per_phase', 100)),
+                                                recalibration_interval=int(kwargs.get('recalibration_interval', 0)),
+                                                ablate_context_dims=kwargs.get('ablate_context_dims', 'false').lower() == 'true',
+                                                )
+                # Wire DBEnv into optimizer for baseline recalibration & PopArt re-labeling.
+                # objective_function is env.step (bound method) → __self__ is the DBEnv instance.
+                if hasattr(self.objective_function, '__self__'):
+                    self.optimizer.env = self.objective_function.__self__
+            elif optimizer_type == 'MoEEdgeDDPG':
+                assert self.num_objs == 1 and num_constraints == 0
+                assert self.incremental == 'none'
+                logger.info('=== Using MoE Edge-DDPG Optimizer (v8) ===')
+                self.optimizer = MoEEdgeDDPG_Optimizer(config_space,
+                                                self.history_container,
+                                                metrics_num=num_metrics,
+                                                task_id=task_id,
+                                                params=kwargs['params'],
+                                                batch_size=kwargs['batch_size'],
+                                                mean_var_file=kwargs['mean_var_file'],
+                                                use_fog_reward=kwargs.get('use_fog_reward', False),
+                                                fog_tier=kwargs.get('fog_tier', None),
+                                                baseline_tps=kwargs.get('baseline_tps', None),
+                                                n_experts=int(kwargs.get('n_experts', 4)),
+                                                load_balance_coef=float(kwargs.get('load_balance_coef', 0.002)),
+                                                steps_per_phase=int(kwargs.get('steps_per_phase', 100)),
+                                                )
             else:
                 raise ValueError('Invalid advisor type!')
         else:
@@ -258,7 +300,15 @@ class PipleLine(BOBase):
                                   batch_size=kwargs['batch_size'],
                                   mean_var_file=kwargs['mean_var_file']
                                   )
-            self.optimizer_list = [SMAC, MBO, DDPG, GA]
+            EdgeDDPG = EdgeDDPG_Optimizer(config_space,
+                                          history_container,
+                                          self.num_metrics,
+                                          self.task_id,
+                                          initial_trials=self.init_num,
+                                          init_strategy=self.init_strategy,
+                                          batch_size=kwargs.get('ddpg_batch_size', 8),
+                                          params=kwargs.get('ddpg_model_params', ''))            
+            self.optimizer_list = [SMAC, MBO, DDPG, EdgeDDPG, GA]
             self.optimizer = SMAC
 
 
@@ -280,6 +330,44 @@ class PipleLine(BOBase):
 
     def run(self):
         compact_space = None
+        # iteration_id is driven by history entries (loaded from JSON).
+        # global_t tracks the model checkpoint step independently.
+        # [DBTune 2.0] If history was lost (e.g. disk-full crash), sync iteration_id
+        # with optimizer.global_t so the pipeline doesn't re-run already-done steps.
+        if self.optimizer_type == 'EdgeDDPG' and hasattr(self.optimizer, 'global_t') and self.optimizer.global_t > self.iteration_id:
+            self.logger.info(f'[Auto-Resume] Syncing iteration_id {self.iteration_id} → {self.optimizer.global_t} (checkpoint takes priority over empty history)')
+            self.iteration_id = self.optimizer.global_t
+        # [Multi-cycle fix] In multi-cycle generalist runs (global_t_base > 0), the
+        # history JSON accumulates ALL prior cycles so iteration_id >> max_iterations,
+        # causing range(max_iterations, max_iterations) = 0 new steps. Fix: derive
+        # iteration_id from steps done WITHIN the current phase (global_t - global_t_base).
+        if self.optimizer_type == 'EdgeDDPG' and hasattr(self.objective_function, '__self__'):
+            _env_chk = self.objective_function.__self__
+            _g_base = getattr(_env_chk, 'global_t_base', 0)
+            if _g_base > 0 and hasattr(self.optimizer, 'global_t'):
+                _steps_in_phase = max(0, self.optimizer.global_t - _g_base)
+                if _steps_in_phase < self.iteration_id:
+                    self.logger.info(
+                        f'[Auto-Resume] Multi-cycle: resetting iteration_id '
+                        f'{self.iteration_id} → {_steps_in_phase} '
+                        f'(global_t={self.optimizer.global_t}, global_t_base={_g_base})'
+                    )
+                    self.iteration_id = _steps_in_phase
+        # [Fix] Cap iteration_id to max_iterations to prevent empty loop when history
+        # has more entries than the current phase's max_runs (e.g. after manual restart).
+        if self.iteration_id > self.max_iterations:
+            self.logger.info(f'[Auto-Resume] iteration_id {self.iteration_id} > max_iterations {self.max_iterations}, capping to max_iterations')
+            self.iteration_id = self.max_iterations
+        if self.iteration_id > 0:
+            self.logger.info(f'[Auto-Resume] Resuming pipeline from iteration {self.iteration_id} (history entries)')
+        # [Fix] Pass the resolved resume point to the env so training_steps.jsonl writes
+        # correct cumulative step numbers (e.g. 426,427... instead of 401,402... after restart).
+        # step_offset = max(iteration_id, global_t_base) covers both fresh and resume cases.
+        if hasattr(self.objective_function, '__self__'):
+            _env = self.objective_function.__self__
+            if hasattr(_env, 'global_t_base'):
+                _env.step_offset = max(self.iteration_id, getattr(_env, 'global_t_base', 0))
+                self.logger.info(f'[Fix] env.step_offset set to {_env.step_offset} (iteration_id={self.iteration_id}, global_t_base={_env.global_t_base})')
         for _ in tqdm(range(self.iteration_id, self.max_iterations)):
             if self.budget_left < 0:
                 self.logger.info('Time %f elapsed!' % self.runtime_limit)
@@ -326,7 +414,16 @@ class PipleLine(BOBase):
                                                         mean_var_file=self.optimizer.mean_var_file)
                         if self.auto_optimizer:
                             self.optimizer_list[-2] = self.optimizer
-
+                    
+                    if isinstance(self.optimizer, EdgeDDPG_Optimizer):
+                        self.optimizer = EdgeDDPG_Optimizer(compact_space,
+                                                            history_container,
+                                                            self.num_metrics,
+                                                            self.task_id,
+                                                            initial_trials=self.init_num,
+                                                            init_strategy=self.init_strategy,
+                                                            batch_size=kwargs.get('ddpg_batch_size', 8),
+                                                            params=kwargs.get('ddpg_model_params', ''))
 
             if self.space_transfer:
                 space = compact_space if not compact_space is None else self.config_space
@@ -512,8 +609,8 @@ class PipleLine(BOBase):
         )
         self.history_container.update_observation(observation)
 
-        if self.optimizer_type in ['GA', 'TurBO', 'DDPG'] and not self.auto_optimizer:
-            if  not self.optimizer_type == 'DDPG' or not trial_state == FAILED:
+        if self.optimizer_type in ['GA', 'TurBO', 'DDPG', 'EdgeDDPG', 'MoEEdgeDDPG'] and not self.auto_optimizer:
+            if  not self.optimizer_type in ['DDPG', 'EdgeDDPG', 'MoEEdgeDDPG'] or not trial_state == FAILED:
                 self.optimizer.update(observation)
 
         if not trial_state == FAILED and self.auto_optimizer and not self.space_transfer:

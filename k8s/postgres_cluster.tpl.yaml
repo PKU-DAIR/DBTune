@@ -1,0 +1,38 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-cluster
+  namespace: pg
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:15.3
+  
+  storage:
+    size: 20Gi
+    storageClass: local-path
+  
+  # Dynamic Resources (Injected by envsubst)
+  resources:
+    requests:
+      memory: "${MEM_LIMIT}"
+      cpu: "${CPU_LIMIT}"
+    limits:
+      memory: "${MEM_LIMIT}"
+      cpu: "${CPU_LIMIT}"
+  
+  # Base Configuration (Safe Default)
+  postgresql:
+    parameters:
+      max_connections: "100"
+      shared_buffers: "128MB"
+      effective_cache_size: "256MB"
+      work_mem: "4MB"
+      maintenance_work_mem: "64MB"
+      wal_buffers: "16MB"
+      checkpoint_completion_target: "0.9"
+      random_page_cost: "1.1"
+      log_min_duration_statement: "5000"
+  
+  # Monitoring for Prometheus
+  monitoring:
+    enablePodMonitor: true

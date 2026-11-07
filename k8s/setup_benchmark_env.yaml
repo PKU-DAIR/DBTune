@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: benchmark
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pg-bench-secret
+  namespace: benchmark
+type: Opaque
+stringData:
+  PGSUPERUSER: "postgres"
+  PGSUPERPASS: "CHANGE_ME"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hammerdb-scripts
+  namespace: benchmark
+data:
+  pg_tprocc_buildschema.tcl: |
+    #!/bin/tclsh
+    proc wait_to_complete {} {
+      set complete [vucomplete]
+      if {!$complete} { after 5000 wait_to_complete } else { exit }
+    }
+
+    puts "TPROC-C buildschema for PostgreSQL"
+    dbset db pg
+    dbset bm TPROC-C
+
+    diset connection pg_host $::env(PGHOST)
+    diset connection pg_port $::env(PGPORT)
+
+    diset tpcc pg_superuser     $::env(PGSUPERUSER)
+    diset tpcc pg_superuserpass $::env(PGSUPERPASS)
+
+    diset tpcc pg_count_ware $::env(TPCC_WAREHOUSES)
+    diset tpcc pg_num_vu     $::env(TPCC_BUILD_VU)
+    diset tpcc pg_vacuum true
+    diset tpcc pg_storedprocs true
+
+    buildschema
+    wait_to_complete
+  pg_tprocc_run.tcl: |
+    #!/bin/tclsh
+    proc wait_to_complete {} {
+      set complete [vucomplete]
+      if {!$complete} { after 5000 wait_to_complete } else { exit }
+    }
+
+    puts "TPROC-C run for PostgreSQL"
+    dbset db pg
+    dbset bm TPROC-C
+
+    diset connection pg_host $::env(PGHOST)
+    diset connection pg_port $::env(PGPORT)
+
+    diset tpcc pg_superuser     $::env(PGSUPERUSER)
+    diset tpcc pg_superuserpass $::env(PGSUPERPASS)
+
+    diset tpcc pg_rampup    $::env(TPCC_RAMPUP_MIN)
+    diset tpcc pg_duration  $::env(TPCC_DURATION_MIN)
+    diset tpcc pg_allwarehouse true
+    diset tpcc pg_timeprofile  false
+    diset tpcc pg_vacuum true
+    diset tpcc pg_storedprocs true
+
+    loadscript
+    vuset vu $::env(TPCC_VUS)
+    vucreate
+    tcstart
+    puts "RUNNING TPROC-C..."
+    vurun
+    wait_to_complete

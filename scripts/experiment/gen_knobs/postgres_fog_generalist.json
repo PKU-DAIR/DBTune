@@ -1,0 +1,47 @@
+{
+    "shared_buffers": {
+        "default": 65536,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 16384,
+        "max": 262144,
+        "comment": "Unidad: bloques 8KB. [128MB–2048MB]. Unión de todos los tiers (2GB→6GB). La adaptación al tier emerge del reward: swap_penalty=-1000 impide que el agente asigne sb>75%RAM en 2GB aunque el rango lo permita. En 6GB el agente puede explorar hasta 2048MB sin penalty."
+    },
+    "effective_cache_size": {
+        "default": 131072,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 32768,
+        "max": 524288,
+        "comment": "Unidad: bloques 8KB. [256MB–4096MB]. Cubre desde el límite de 2GB (1536MB útil) hasta el 75% de 6Gi (4608MB)."
+    },
+    "work_mem": {
+        "default": 4096,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 1024,
+        "max": 16384,
+        "comment": "Unidad: KB. [1MB–16MB]. El techo de 2GB era 2MB (×20VUs=40MB). El reward penaliza valores que saturen la memoria total. El agente aprenderá a usar 1-2MB en 2GB y 8-16MB en 6GB gracias a las context dims."
+    },
+    "maintenance_work_mem": {
+        "default": 65536,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 16384,
+        "max": 524288,
+        "comment": "Unidad: KB. [16MB–512MB]. 2GB tier usaba máx 64MB; 6GB puede usar 512MB. El agente aprende el límite por tier via context dims + memory penalty."
+    },
+    "checkpoint_completion_target": {
+        "default": 0.9,
+        "context": "sighup",
+        "scope": "global",
+        "type": "float",
+        "min": 0.5,
+        "max": 0.99,
+        "comment": "Idéntico en todos los tiers. [0.5–0.99]."
+    }
+}

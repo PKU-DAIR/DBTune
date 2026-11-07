@@ -1,0 +1,218 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-exporter-queries
+  namespace: pg
+data:
+  queries.yaml: |
+    custom_pg_stat_statements:
+      query: |
+        SELECT queryid::text,
+               calls,
+               total_exec_time,
+               mean_exec_time,
+               rows
+        FROM pg_stat_statements
+        WHERE query NOT LIKE '%pg_stat_statements%'
+          AND queryid IS NOT NULL
+        ORDER BY total_exec_time DESC
+        LIMIT 20
+      cache_seconds: 120
+      metrics:
+        - queryid:
+            usage: "LABEL"
+            description: "Query ID"
+        - calls:
+            usage: "COUNTER"
+            description: "Times executed"
+        - total_exec_time:
+            usage: "COUNTER"
+            description: "Total exec time (ms)"
+        - mean_exec_time:
+            usage: "GAUGE"
+            description: "Mean exec time (ms)"
+        - rows:
+            usage: "COUNTER"
+            description: "Rows affected"
+
+    custom_pg_database_size:
+      query: |
+        SELECT datname,
+               pg_database_size(datname) AS size_bytes
+        FROM pg_database
+        WHERE datname NOT IN ('template0','template1')
+      cache_seconds: 60
+      metrics:
+        - datname:
+            usage: "LABEL"
+        - size_bytes:
+            usage: "GAUGE"
+
+    custom_pg_table_size:
+      query: |
+        SELECT schemaname || '.' || tablename AS table_name,
+               pg_total_relation_size(quote_ident(schemaname)||'.'||quote_ident(tablename))::bigint AS total_bytes,
+               pg_relation_size(quote_ident(schemaname)||'.'||quote_ident(tablename))::bigint AS table_bytes
+        FROM pg_tables
+        WHERE schemaname NOT IN ('pg_catalog','information_schema')
+        ORDER BY total_bytes DESC
+        LIMIT 20
+      cache_seconds: 300
+      metrics:
+        - table_name:
+            usage: "LABEL"
+        - total_bytes:
+            usage: "GAUGE"
+        - table_bytes:
+            usage: "GAUGE"
+
+    custom_pg_cache_hit_ratio:
+      query: |
+        SELECT 'buffer_cache' AS cache_type,
+               COALESCE(
+                 sum(heap_blks_hit)::float /
+                 NULLIF(sum(heap_blks_hit)+sum(heap_blks_read),0),
+                 0
+               ) AS ratio
+        FROM pg_statio_user_tables
+      cache_seconds: 30
+      metrics:
+        - cache_type:
+            usage: "LABEL"
+        - ratio:
+            usage: "GAUGE"
+
+    custom_pg_connections_state:
+      query: |
+        SELECT state,
+               count(*) AS connections
+        FROM pg_stat_activity
+        WHERE backend_type = 'client backend'
+        GROUP BY state
+      cache_seconds: 10
+      metrics:
+        - state:
+            usage: "LABEL"
+        - connections:
+            usage: "GAUGE"
+
+    custom_pg_slow_queries:
+      query: |
+        SELECT pid::text,
+               usename,
+               datname,
+               left(query, 80) AS query_text,
+               EXTRACT(EPOCH FROM (now() - query_start))::float AS duration_seconds
+        FROM pg_stat_activity
+        WHERE state = 'active'
+          AND backend_type = 'client backend'
+          AND usename NOT IN ('streaming_replica')
+          AND query NOT ILIKE 'START_REPLICATION%'
+          AND query NOT LIKE '%pg_stat_activity%'
+          AND (now() - query_start) > interval '5 seconds'
+        ORDER BY duration_seconds DESC
+        LIMIT 10
+      cache_seconds: 10
+      metrics:
+        - pid:
+            usage: "LABEL"
+        - usename:
+            usage: "LABEL"
+        - datname:
+            usage: "LABEL"
+        - query_text:
+            usage: "LABEL"
+        - duration_seconds:
+            usage: "GAUGE"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-exporter-secret
+  namespace: pg
+type: Opaque
+data:
+  DATA_SOURCE_NAME: cG9zdGdyZXNxbDovL3Bvc3RncmVzOnlZQ25qUTYxTnMya3JwUEY4ejFWS0IydU93ZnZLWk5hRk1jV3FtUDkzUkVRQTJYZlFzZXRkRVIycXN0UnRYaVBAcGctY2x1c3Rlci1ydzo1NDMyL3Bvc3RncmVzP3NzbG1vZGU9ZGlzYWJsZQ==
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: postgres-exporter
+  name: postgres-exporter
+  namespace: pg
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-exporter
+  template:
+    metadata:
+      labels:
+        app: postgres-exporter
+    spec:
+      containers:
+      - args:
+        - --log.level=debug
+        - --web.listen-address=:9187
+        - --web.telemetry-path=/metrics
+        - --extend.query-path=/etc/postgres_exporter/queries.yaml
+        env:
+        - name: DATA_SOURCE_NAME
+          value: postgresql://postgres:CHANGE_ME@pg-cluster-rw:5432/postgres?sslmode=disable
+        - name: PG_EXPORTER_EXTEND_QUERY_PATH
+          value: /etc/postgres_exporter/queries.yaml
+        - name: PG_EXPORTER_AUTO_DISCOVER_DATABASES
+          value: "true"
+        image: quay.io/prometheuscommunity/postgres-exporter:v0.18.1
+        imagePullPolicy: IfNotPresent
+        name: exporter
+        ports:
+        - containerPort: 9187
+          name: metrics
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /etc/postgres_exporter/queries.yaml
+          name: queries
+          readOnly: true
+          subPath: queries.yaml
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: postgres-exporter-queries
+        name: queries
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: postgres-exporter
+  name: postgres-exporter
+  namespace: pg
+spec:
+  ports:
+  - name: metrics
+    port: 9187
+    protocol: TCP
+    targetPort: 9187
+  selector:
+    app: postgres-exporter
+  type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app: postgres-exporter
+    release: prometheus
+  name: postgres-exporter
+  namespace: pg
+spec:
+  endpoints:
+  - interval: 30s
+    path: /metrics
+    port: metrics
+    scheme: http
+  selector:
+    matchLabels:
+      app: postgres-exporter

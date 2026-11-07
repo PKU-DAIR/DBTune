@@ -1,0 +1,47 @@
+{
+    "shared_buffers": {
+        "default": 49152,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 16384,
+        "max": 98304,
+        "comment": "Cache de páginas de PostgreSQL. Unidad: bloques 8KB. [128MB–768MB]. Techo = 37.5% de 2Gi (768MB). Por encima de PGTune (384MB=25% de max_memory_mb 1536) para dar holgura. CRÍTICO: swap_penalty=-1000 en FogAwareRewardV2 protege contra OOM."
+    },
+    "effective_cache_size": {
+        "default": 131072,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 32768,
+        "max": 196608,
+        "comment": "Estimación del planificador sobre la memoria disponible para caché. Unidad: bloques 8KB. [256MB–1536MB = 75% de 2Gi]."
+    },
+    "work_mem": {
+        "default": 1024,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 1024,
+        "max": 2048,
+        "comment": "Memoria por operación de sort/hash. Unidad: KB. [1MB–2MB]. Con 20 VUs: 2MB × 20 = 40MB máximo en 2GB tier. Muy restrictivo — memoria escasa."
+    },
+    "maintenance_work_mem": {
+        "default": 16384,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 16384,
+        "max": 65536,
+        "comment": "Memoria para VACUUM, CREATE INDEX. Unidad: KB. [16MB–64MB]. Muy ajustado en 2GB tier."
+    },
+    "checkpoint_completion_target": {
+        "default": 0.9,
+        "context": "sighup",
+        "scope": "global",
+        "type": "float",
+        "min": 0.5,
+        "max": 0.99,
+        "comment": "Fracción del intervalo entre checkpoints. [0.5–0.99]. En 2GB tier los checkpoints frecuentes son más críticos — espacio en disco limitado."
+    }
+}

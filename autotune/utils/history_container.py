@@ -147,7 +147,9 @@ class HistoryContainer(object):
         if not self.info:
             self.info = info
 
-        assert self.info == info
+        # Soft check: only verify objective names match (not dynamic fields like effective_knobs)
+        if self.info.get('objs') != info.get('objs'):
+            raise AssertionError(f"Objective changed mid-run: {self.info.get('objs')} vs {info.get('objs')}")
 
         self.configurations.append(config)
         self.configurations_all.append((self.fill_default_value(config)))
@@ -343,6 +345,23 @@ class HistoryContainer(object):
             elapsed_time = tmp['elapsed_time']
             iter_time = tmp['iter_time'] if 'iter_time' in tmp.keys() else tmp['elapsed_time']
             context = tmp['context'] if 'context' in tmp.keys() else None
+            
+            # [Fix] Convert resource list to dict if needed (backward compatibility)
+            if isinstance(resource, list):
+                 resource = {
+                    'cpu': resource[0] if len(resource) > 0 else 0,
+                    'readIO': resource[1] if len(resource) > 1 else 0,
+                    'writeIO': resource[2] if len(resource) > 2 else 0,
+                    'IO': (resource[1] + resource[2]) if len(resource) > 2 else 0,
+                    'virtualMem': resource[3] if len(resource) > 3 else 0,
+                    'physical': resource[4] if len(resource) > 4 else 0,
+                    'dirty': resource[5] if len(resource) > 5 else 0,
+                    'hit': resource[6] if len(resource) > 6 else 0,
+                    'data': resource[7] if len(resource) > 7 else 0,
+                    'io_wait': resource[8] if len(resource) > 8 else 0.0,
+                    'total_mem': resource[9] if len(resource) > 9 else 0.0,
+                }
+
             res = dict(em, **resource)
 
             self.configurations.append(config)

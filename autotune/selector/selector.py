@@ -44,7 +44,7 @@ class KnobSelector(ABC):
 
         X_df = config2df(history_container.configurations_all)
         X_df = X_df[columns]
-        if not use_imcub:
+        if not use_imcub or len(history_container.incumbents) == 0:
             X_bench_df = config2df([history_container.config_space_all.get_default_configuration(), ])
         else:
             X_bench_df = config2df([history_container.incumbents[0][0]])
@@ -60,7 +60,25 @@ class KnobSelector(ABC):
                 X_df[col] = X_df[col].astype('float')
 
 
-        Y = -  np.array(history_container.get_transformed_perfs()).astype('float')
+        
+        # [DBTune Fix] Robust filtering for failed trials (MAXINT/Inf)
+        Y_all = - np.array(history_container.get_transformed_perfs()).astype('float')
+        
+        # Filter out Infinite or extremely large values (failed runs)
+        valid_mask = np.isfinite(Y_all) & (np.abs(Y_all) < 1e10)
+        
+        if np.sum(valid_mask) < 5:
+            self.logger.warning("Not enough valid samples for SHAP selection. Returning random.")
+            return config_space, list(columns)[:num_hps]
+            
+        Y = Y_all[valid_mask]
+        X_df = X_df.loc[valid_mask]
+        
+        # [DBTune Fix] Handle zero variance (all values identical)
+        if Y.max() == Y.min():
+            self.logger.warning("All valid samples have same performance. Returning random selection.")
+            return config_space, list(columns)[:num_hps]
+
         Y_scaled = (Y - Y.min()) / (Y.max() - Y.min())
 
         if prediction:

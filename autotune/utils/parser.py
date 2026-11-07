@@ -84,8 +84,8 @@ def parse_sysbench(file_path):
     with open(file_path) as f:
         lines = f.read()
     temporal_pattern = re.compile(
-                "tps: (\d+.\d+) qps: (\d+.\d+) \(r/w/o: (\d+.\d+)/(\d+.\d+)/(\d+.\d+)\)"
-                " lat \(ms,95%\): (\d+.\d+) err/s: (\d+.\d+) reconn/s: (\d+.\d+)")
+                r"thds: \d+ tps: (\d+\.?\d*) qps: (\d+\.?\d*) \(r/w/o: (\d+\.?\d*)/(\d+\.?\d*)/(\d+\.?\d*)\)"
+                r" lat \(ms,95%\): (\d+\.?\d*) err/s: (\d+\.?\d*) reconn/s: (\d+\.?\d*)")
     temporal = temporal_pattern.findall(lines)
     tps, latency, qps = 0, 0, 0
     tpsL, latL ,qpsL = [], [], []
@@ -112,7 +112,6 @@ def parse_sysbench(file_path):
     else:
         print('num_samples is zero!')
         return[-1, -1, -1, -1, -1, -1]
-
 
 def parse_job(file_path, select_file, timeout=4):
     with open(file_path) as f:
