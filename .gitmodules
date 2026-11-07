@@ -1,3 +1,0 @@
-[submodule "oltpbench"]
-	path = oltpbench
-	url = git@gitlab.alibaba-inc.com:aidb/oltpbench.git

@@ -1,0 +1,47 @@
+{
+    "shared_buffers": {
+        "default": 131072,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 65536,
+        "max": 262144,
+        "comment": "Memoria compartida (requiere reinicio). Unidad: bloques 8KB. [512MB-2048MB]. tier_bounds limita por tier. Min elevado a 512MB: valores menores son inútiles en sistemas 2GB+."
+    },
+    "effective_cache_size": {
+        "default": 524288,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 65536,
+        "max": 1048576,
+        "comment": "Estimación de cache del OS (advisory). Unidad: bloques 8KB. [512MB-8GB]."
+    },
+    "work_mem": {
+        "default": 4096,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 1024,
+        "max": 16384,
+        "comment": "Memoria por operación. Unidad: KB. [1MB-16MB]"
+    },
+    "maintenance_work_mem": {
+        "default": 65536,
+        "context": "user",
+        "scope": "global",
+        "type": "integer",
+        "min": 16384,
+        "max": 262144,
+        "comment": "Memoria para VACUUM, CREATE INDEX. Unidad: KB. [16MB-256MB]"
+    },
+    "checkpoint_completion_target": {
+        "default": 0.9,
+        "context": "sighup",
+        "scope": "global",
+        "type": "float",
+        "min": 0.85,
+        "max": 0.99,
+        "comment": "Rango [0.85-0.99]. Min elevado a 0.85: valores menores concentran checkpoint I/O y degradan TPS en benchmarks de 5min."
+    }
+}

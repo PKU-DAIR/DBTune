@@ -92,12 +92,13 @@ class PostgresqlConnector(DBConnector):
     def connect_db(self):
         conn = False
         if self.sock:
-            conn = psycopg2.connect(host=self.dbhost,
+            # For Unix socket, use the directory path as host
+            socket_dir = self.sock.rsplit('/', 1)[0] if '/' in self.sock else '/var/run/postgresql'
+            conn = psycopg2.connect(host=socket_dir,
                                     user=self.dbuser,
                                     password=self.dbpasswd,
                                     database=self.dbname,
-                                    port=self.dbport,
-                                    unix_socket=self.sock)
+                                    port=self.dbport)
         else:
             conn = psycopg2.connect(host=self.dbhost,
                                     user=self.dbuser,

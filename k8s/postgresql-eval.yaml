@@ -1,0 +1,18 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-cluster
+  namespace: pg
+spec:
+  postgresql:
+    parameters:
+      # EVAL MODE: mismas condiciones de infraestructura que el training.
+      # Estos parámetros no forman parte del action space del agente (postgres_fog_v2.json)
+      # y deben ser iguales en training y evaluación para una comparación justa.
+      archive_mode: "off"
+      wal_log_hints: "off"
+      max_wal_size: "16GB"
+      min_wal_size: "1GB"
+      max_worker_processes: "8"
+      max_parallel_workers: "4"
+      max_parallel_workers_per_gather: "2"

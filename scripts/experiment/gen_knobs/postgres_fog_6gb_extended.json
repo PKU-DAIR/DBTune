@@ -1,0 +1,47 @@
+{
+    "shared_buffers": {
+        "default": 131072,
+        "context": "postmaster",
+        "scope": "global",
+        "type": "integer",
+        "min": 65536,
+        "max": 262144,
+        "comment": "Cache de páginas de PostgreSQL. Unidad: bloques 8KB. [512MB–2048MB]. Techo ampliado a 33% de 6Gi para validar que el óptimo aprendido (1516MB) es interior al rango y no un artefacto del techo."
+    },
+    "effective_cache_size": {
+        "default": 524288,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 65536,
+        "max": 524288,
+        "comment": "Estimación del planificador sobre la memoria disponible para caché. Unidad: bloques 8KB. [512MB–4096MB]."
+    },
+    "work_mem": {
+        "default": 4096,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 1024,
+        "max": 16384,
+        "comment": "Memoria por operación de sort/hash. Unidad: KB. [1MB–16MB]. Con 20 VUs: 16MB × 20 = 320MB máximo."
+    },
+    "maintenance_work_mem": {
+        "default": 65536,
+        "context": "sighup",
+        "scope": "global",
+        "type": "integer",
+        "min": 65536,
+        "max": 524288,
+        "comment": "Memoria para VACUUM, CREATE INDEX. Unidad: KB. [64MB–512MB]."
+    },
+    "checkpoint_completion_target": {
+        "default": 0.9,
+        "context": "sighup",
+        "scope": "global",
+        "type": "float",
+        "min": 0.5,
+        "max": 0.99,
+        "comment": "Fracción del intervalo entre checkpoints. [0.5–0.99]. PGTune recomienda 0.9."
+    }
+}

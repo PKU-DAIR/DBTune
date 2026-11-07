@@ -1,0 +1,22 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-cluster
+  namespace: pg
+spec:
+  postgresql:
+    parameters:
+      # TRAINING MODE: Disable Archiving & optimize for I/O
+      wal_level: "replica"
+      archive_mode: "off"
+      wal_log_hints: "off"
+      
+      # WORKER TUNING: Aligned with Raspberry Pi 4 (4 CPUs)
+      max_worker_processes: "8"
+      max_parallel_workers: "4"
+      max_parallel_workers_per_gather: "2"
+      
+      # I/O OPTIMIZATION: Reduce checkpoint frequency
+      checkpoint_completion_target: "0.9"
+      max_wal_size: "4GB"
+      min_wal_size: "1GB"

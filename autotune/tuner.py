@@ -173,7 +173,13 @@ class DBTuner:
                        hold_out_workload=self.args_db['workload'],
                        history_workload_data=self.history_workload_data,
                        only_knob=eval(self.args_tune['only_knob']),
-                       only_range=eval(self.args_tune['only_range']))
+                       only_range=eval(self.args_tune['only_range']),
+                       use_fog_reward=eval(self.args_tune.get('use_fog_reward', 'False')),
+                       fog_tier=self.args_tune.get('fog_tier', None),
+                       baseline_tps=float(self.args_tune.get('baseline_tps', '1000.0')),
+                       steps_per_phase=int(self.args_tune.get('steps_per_phase', 100)),
+                       recalibration_interval=int(self.args_tune.get('recalibration_interval', 0)),
+                       ablate_context_dims=self.args_tune.get('ablate_context_dims', 'false'))
         history = bo.run()
         if history.num_objs == 1:
             import matplotlib.pyplot as plt

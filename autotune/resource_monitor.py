@@ -22,14 +22,15 @@ class ResourceMonitor:
         self.dirty_pages_pct_seq = Manager().list()
         self.processes = []
         self.alive = mp.Value('b', False)
+        self.pid = pid
 
     def run(self):
         p1 = mp.Process(target=self.monitor_cpu_usage, args=())
         self.processes.append(p1)
         p2 = mp.Process(target=self.monitor_mem_usage, args=())
         self.processes.append(p2)
-        p3 = mp.Process(target=self.monitor_io_usage, args=())
-        self.processes.append(p3)
+#        p3 = mp.Process(target=self.monitor_io_usage, args=())
+#        self.processes.append(p3)
         self.alive.value = True
         [proc.start() for proc in self.processes]
 
@@ -51,8 +52,8 @@ class ResourceMonitor:
         io_write = list(self.io_write_seq)
 
         avg_cpu = sum(cpu) / (len(cpu) + 1e-9) / self.n_cpu
-        avg_read_io = sum(io_read) / (len(io_read) + 1e-9)
-        avg_write_io = sum(io_write) / (len(io_write) + 1e-9)
+        avg_read_io = 0 #sum(io_read) / (len(io_read) + 1e-9)
+        avg_write_io = 0 #sum(io_write) / (len(io_write) + 1e-9)
         avg_virtual_memory = sum(mem_virtual) / (len(mem_virtual) + 1e-9)
         avg_physical_memory = sum(mem_physical) / (len(mem_physical) + 1e-9)
         return avg_cpu, avg_read_io, avg_write_io, avg_virtual_memory, avg_physical_memory
@@ -64,37 +65,54 @@ class ResourceMonitor:
                 time.sleep(self.interval)
                 count = count + 1
                 continue
-            mem_physical = self.process.memory_info()[0]/(1024.0 * 1024.0 * 1024.0)
-            mem_virtual = self.process.memory_info()[1]/(1024.0 * 1024.0 * 1024.0)
+            mem_physical = self.process.memory_info()[0]/(1024.0 * 1024.0)
+            mem_virtual = self.process.memory_info()[1]/(1024.0 * 1024.0)
             self.mem_physical_usage_seq.append(mem_physical)
             self.mem_virtual_usage_seq.append(mem_virtual)
             time.sleep(self.interval)
             count += 1
-
-    def monitor_io_usage(self):
-        count = 0
-        while self.alive.value and count < self.ticks:
-            if count < self.warmup:
-                time.sleep(self.interval)
-                count = count + 1
-                continue
-            sp1 = self.process.io_counters()
-            time.sleep(self.interval)
-            sp2 = self.process.io_counters()
-            self.io_read_seq.append((sp2[2]-sp1[2])/(1024.0 * 1024.0))
-            self.io_write_seq.append((sp2[3]-sp1[3])/(1024.0 * 1024.0))
-            count += 1
-
     def monitor_cpu_usage(self):
         count = 0
+        
+        try:
+            main_process = psutil.Process(self.pid)
+        except Exception as e:
+            return
+        
         while self.alive.value and count < self.ticks:
             if count < self.warmup:
                 time.sleep(self.interval)
                 count = count + 1
                 continue
-            cpu = self.process.cpu_percent(interval=self.interval)
-            self.cpu_usage_seq.append(cpu)
+            
+            try:
+                # Measure CPU: main process + all workers
+                total_cpu = 0.0
+                
+                # Main process
+                try:
+                    total_cpu += main_process.cpu_percent(interval=1)
+                except:
+                    pass
+                
+                # Workers
+                try:
+                    children = main_process.children(recursive=True)
+                    for child in children:
+                        try:
+                            cpu = child.cpu_percent(interval=0.1)
+                            total_cpu += cpu
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+                except:
+                    pass
+                
+                self.cpu_usage_seq.append(total_cpu)
+            except:
+                self.cpu_usage_seq.append(0.0)
+            
             count += 1
+
 
     def terminate(self):
         self.alive.value = False

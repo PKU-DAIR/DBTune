@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tprocc-buildschema
+  namespace: benchmark
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: hammerdb
+        bench: tprocc-build
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        role: benchmark
+      containers:
+      - name: hammerdb
+        image: tpcorg/hammerdb:latest
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1500m"
+            memory: "1Gi"
+        env:
+        - name: PGHOST
+          value: "pg-cluster-rw.pg.svc.cluster.local"
+        - name: PGPORT
+          value: "5432"
+        - name: TPCC_WAREHOUSES
+          value: "20"
+        - name: TPCC_BUILD_VU
+          value: "4"
+        envFrom:
+        - secretRef:
+            name: pg-bench-secret
+        volumeMounts:
+        - name: scripts
+          mountPath: /work
+        command: ["./hammerdbcli", "auto", "/work/pg_tprocc_buildschema.tcl"]          
+      volumes:
+      - name: scripts
+        configMap:
+          name: hammerdb-scripts

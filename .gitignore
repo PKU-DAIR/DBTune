@@ -1,12 +1,179 @@
-*.pyc
-*.log
-*.idea
+# ===================================
+# Python
+# ===================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+venv/
+env/
+ENV/
+.venv
+
+# ===================================
+# Machine Learning / PyTorch
+# ===================================
+*.pth
+*.pt
+*.ckpt
+*.h5
 *.pkl
-*.png
-*.DS_Store
-*.out
-train_user_*.py
-*.res
-*.png
-scripts/log/
+*.pkl.*
+*.pickle
+
+checkpoints/
+runs/
+logs/tensorboard/
+wandb/
+
+# ===================================
+# Experimentos y Logs
+# ===================================
+log/
+logs/
+*.log
+nohup.out
+all.record
+
+# Resultados de tuning
+results/
+output/
+data_repo/
+backups/
+
+# Modelos entrenados y datos
+/DBTune_history/
+/ddpg/
+/model_params/
+/runs/
+/results/
+
+# Training logs
+*.jsonl
+*.jsonl.*
+training_steps_*.jsonl
+
+# Mean/variance files
+*_mean_var.pkl
+edge_ddpg_mean_var.pkl
+
+*.tmp
+*.temp
+temp_*/
+tmp_*/
+*.pid
+
+# ===================================
+# IDEs y Editores
+# ===================================
 .vscode/
+*.code-workspace
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+\#*\#
+*.sublime-project
+*.sublime-workspace
+.ipynb_checkpoints
+*.ipynb
+
+# ===================================
+# Sistema Operativo
+# ===================================
+.DS_Store
+.AppleDouble
+.LSOverride
+.directory
+.Trash-*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ===================================
+# Bases de Datos
+# ===================================
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.gz
+
+# ===================================
+# Configuración Sensible
+# ===================================
+kubeconfig
+*.kubeconfig
+k8s/*secret*.yaml
+!k8s/*secret*.example.yaml
+config_local*.ini
+*_local.ini
+
+# ===================================
+# Archivos Grandes / Datasets
+# ===================================
+data/
+datasets/
+*.csv.gz
+*.tar.gz
+*.zip
+
+# Imágenes (excepto las de k8s docs si las hubiera)
+*.png
+*.jpg
+*.jpeg
+
+# ===================================
+# Testing
+# ===================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ===================================
+# Docs internas / personales / IA
+# ===================================
+/docs/
+/documents/
+/MBA/
+/memory/
+/.claude/
+CLAUDE.md
+AGENTS.md
+
+# ===================================
+# Backups
+# ===================================
+*.backup
+*.backup[0-9]
+*.bak
+*.old
+
+# ===================================
+# DBTune: anclar para no ignorar autotune/job_query y autotune/tpch_query
+# ===================================
+/job_query/
+/tpch_query/
+
+# Archivos de configuración de experimentos
+config_*.ini.backup*
